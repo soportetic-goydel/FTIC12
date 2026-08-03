@@ -1,0 +1,11 @@
+node_modules/**
+.git/**
+.github/**
+docs/**
+docs_base/**
+README.md
+PROMPT_BASE_CHAT.md
+*.zip
+.env
+.env.*
+.clasprc.json

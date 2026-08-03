@@ -1,0 +1,644 @@
+<script>
+(function () {
+  const dniLength = Number(<?= CONFIG.VALIDATION.DNI_LENGTH ?>);
+  const movilLength = Number(<?= CONFIG.VALIDATION.MOVIL_LENGTH ?>);
+  const dniAutoBusquedaDelayMs = 350;
+
+  const el = {
+    dni: document.getElementById('dni'),
+    btnBuscarDni: document.getElementById('btnBuscarDni'),
+    dniAyuda: document.getElementById('dniAyuda'),
+    nombreCompleto: document.getElementById('nombreCompleto'),
+    cargo: document.getElementById('cargo'),
+    movil: document.getElementById('movil'),
+    proyectoSede: document.getElementById('proyectoSede'),
+    empresaDelGrupo: document.getElementById('empresaDelGrupo'),
+    centroCosto: document.getElementById('centroCosto'),
+    cecoNumero: document.getElementById('cecoNumero'),
+    tipoEquipo: document.getElementById('tipoEquipo'),
+    activoAfectado: document.getElementById('activoAfectado'),
+    tipoProblema: document.getElementById('tipoProblema'),
+    prioridad: document.getElementById('prioridad'),
+    descripcion: document.getElementById('descripcion'),
+    btnVerSla: document.getElementById('btnVerSla'),
+    slaModal: document.getElementById('slaModal'),
+    btnCerrarSla: document.getElementById('btnCerrarSla'),
+    slaTipoProblemaActual: document.getElementById('slaTipoProblemaActual'),
+    slaPrioridadActual: document.getElementById('slaPrioridadActual'),
+    slaTiempoActual: document.getElementById('slaTiempoActual'),
+    slaLista: document.getElementById('slaLista'),
+    anydeskBox: document.getElementById('anydeskBox'),
+    anydeskId: document.getElementById('anydeskId'),
+    anydeskPassword: document.getElementById('anydeskPassword'),
+    btnEnviar: document.getElementById('btnEnviar'),
+    btnNuevoReporte: document.getElementById('btnNuevoReporte'),
+    ticketId: document.getElementById('ticketId'),
+    formProgressFill: document.getElementById('formProgressFill'),
+    formProgressTexto: document.getElementById('formProgressTexto')
+  };
+
+  let dniAutoBusquedaTimer = null;
+  let ultimoDniConsultado = '';
+  let dniEnConsulta = '';
+  let dniConsultaSecuencia = 0;
+  let cecoConsultaSecuencia = 0;
+  let cecoPreferido = null;
+  let ultimaClaveSlaAutoMostrada = '';
+  const slaPorPrioridad = {
+    Baja: {
+      tiempo: 'Hasta 8 horas habiles',
+      detalle: 'Incidencia de bajo impacto o con alternativa temporal de trabajo.'
+    },
+    Media: {
+      tiempo: 'Hasta 4 horas habiles',
+      detalle: 'Incidencia que afecta la continuidad normal de una actividad.'
+    },
+    Alta: {
+      tiempo: 'Hasta 2 horas habiles',
+      detalle: 'Incidencia critica que bloquea la operacion o afecta servicios clave.'
+    }
+  };
+
+  function normalizarTextoNumerico(valor) {
+    let texto = String(valor || '');
+    try {
+      texto = texto.normalize('NFKC');
+    } catch (error) {
+      // Continuar con el texto original si `normalize` no estuviera disponible.
+    }
+
+    let salida = '';
+    for (let i = 0; i < texto.length; i++) {
+      const codigo = texto.charCodeAt(i);
+      if (codigo >= 48 && codigo <= 57) {
+        salida += texto.charAt(i);
+      } else if (codigo >= 65296 && codigo <= 65305) {
+        salida += String(codigo - 65296);
+      } else if (codigo >= 1632 && codigo <= 1641) {
+        salida += String(codigo - 1632);
+      } else if (codigo >= 1776 && codigo <= 1785) {
+        salida += String(codigo - 1776);
+      }
+    }
+    return salida;
+  }
+
+  function normalizarDni(valor) {
+    return normalizarTextoNumerico(valor).slice(0, dniLength);
+  }
+
+  function normalizarMovil(valor) {
+    return normalizarTextoNumerico(valor).slice(0, movilLength);
+  }
+
+  function normalizarClave(valor) {
+    let texto = String(valor || '');
+    try {
+      texto = texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    } catch (error) {
+      // Si el navegador no soporta normalize, seguimos comparando con el texto base.
+    }
+    return texto.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
+  function tipoEquipoPermiteAnydesk(tipoEquipo) {
+    const clave = normalizarClave(tipoEquipo);
+    return clave.indexOf('PCPORT') !== -1 ||
+      clave.indexOf('PCESCRITORIO') !== -1 ||
+      clave === 'SMARTPHONE';
+  }
+
+  function actualizarVisibilidadAnydesk() {
+    const mostrar = tipoEquipoPermiteAnydesk(el.tipoEquipo.value);
+    el.anydeskBox.hidden = !mostrar;
+
+    if (!mostrar) {
+      el.anydeskId.value = '';
+      el.anydeskPassword.value = '';
+    }
+  }
+
+  function actualizarSlaModal() {
+    const prioridad = el.prioridad.value || '';
+    const tipoProblema = el.tipoProblema.value || '';
+    const slaActual = slaPorPrioridad[prioridad] || null;
+
+    el.slaTipoProblemaActual.textContent = tipoProblema || 'No seleccionado';
+    el.slaPrioridadActual.textContent = prioridad || 'No seleccionada';
+    el.slaTiempoActual.textContent = slaActual ? slaActual.tiempo : 'Selecciona una prioridad';
+    el.slaLista.innerHTML = '';
+
+    Object.keys(slaPorPrioridad).forEach(function (nivel) {
+      const item = document.createElement('div');
+      item.className = 'sla-item' + (nivel === prioridad ? ' is-active' : '');
+
+      const texto = document.createElement('div');
+      const label = document.createElement('span');
+      label.className = 'sla-item-label';
+      label.textContent = 'Prioridad';
+      const nombre = document.createElement('strong');
+      nombre.textContent = nivel;
+      const detalle = document.createElement('div');
+      detalle.className = 'sla-modal-copy';
+      detalle.textContent = slaPorPrioridad[nivel].detalle;
+      texto.appendChild(label);
+      texto.appendChild(nombre);
+      texto.appendChild(detalle);
+
+      const tiempo = document.createElement('div');
+      tiempo.className = 'sla-item-time';
+      tiempo.textContent = slaPorPrioridad[nivel].tiempo;
+
+      item.appendChild(texto);
+      item.appendChild(tiempo);
+      el.slaLista.appendChild(item);
+    });
+  }
+
+  function abrirSlaModal() {
+    actualizarSlaModal();
+    el.slaModal.hidden = false;
+    el.btnCerrarSla.focus();
+  }
+
+  function cerrarSlaModal() {
+    el.slaModal.hidden = true;
+    el.btnVerSla.focus();
+  }
+
+  function evaluarAperturaAutomaticaSla() {
+    const tipoProblema = el.tipoProblema.value || '';
+    const prioridad = el.prioridad.value || '';
+    if (!tipoProblema || !prioridad) return;
+
+    const clave = tipoProblema + '|' + prioridad;
+    if (clave === ultimaClaveSlaAutoMostrada) return;
+
+    ultimaClaveSlaAutoMostrada = clave;
+    setTimeout(function () {
+      if (el.tipoProblema.value && el.prioridad.value && el.slaModal.hidden) {
+        abrirSlaModal();
+      }
+    }, 180);
+  }
+
+  function construirMensajeDniInvalido(valor) {
+    return 'El DNI debe tener ' + dniLength + ' digitos.';
+  }
+
+  function sincronizarCamposNumericos() {
+    el.dni.value = normalizarDni(el.dni.value);
+    el.movil.value = normalizarMovil(el.movil.value);
+  }
+
+  function programarBusquedaDni(opciones) {
+    if (dniAutoBusquedaTimer) {
+      clearTimeout(dniAutoBusquedaTimer);
+      dniAutoBusquedaTimer = null;
+    }
+
+    const configuracion = opciones || {};
+    const delay = typeof configuracion.delayMs === 'number' ? configuracion.delayMs : dniAutoBusquedaDelayMs;
+    dniAutoBusquedaTimer = setTimeout(function () {
+      dniAutoBusquedaTimer = null;
+      sincronizarCamposNumericos();
+      buscarDni(el.dni.value, {
+        forzar: !!configuracion.forzar,
+        mostrarErrorLongitud: !!configuracion.mostrarErrorLongitud
+      });
+    }, delay);
+  }
+
+  function marcarAutocompletado(campo) {
+    campo.classList.remove('autocompletado');
+    void campo.offsetWidth;
+    campo.classList.add('autocompletado');
+  }
+
+  function actualizarProgreso() {
+    const campos = [
+      normalizarDni(el.dni.value).length === dniLength,
+      normalizarMovil(el.movil.value).length === movilLength,
+      !!el.nombreCompleto.value.trim(),
+      !!el.cargo.value.trim(),
+      !!el.proyectoSede.value.trim(),
+      !!el.empresaDelGrupo.value,
+      !!el.centroCosto.value,
+      !!el.tipoEquipo.value,
+      !!el.activoAfectado.value.trim(),
+      !!el.tipoProblema.value,
+      !!el.prioridad.value,
+      !!el.descripcion.value.trim()
+    ];
+
+    const completos = campos.filter(Boolean).length;
+    const porcentaje = Math.round((completos / campos.length) * 100);
+    el.formProgressFill.style.width = porcentaje + '%';
+    el.formProgressTexto.textContent = porcentaje + '%';
+  }
+
+  document.getElementById('view-form').addEventListener('input', actualizarProgreso);
+  document.getElementById('view-form').addEventListener('change', actualizarProgreso);
+
+  function llenarSelect(select, opciones, textoVacio) {
+    select.innerHTML = '<option value="">' + textoVacio + '</option>';
+    opciones.forEach(function (opcion) {
+      const option = document.createElement('option');
+      option.value = opcion.value;
+      option.textContent = opcion.label;
+      if (opcion.cecoNumero) option.dataset.cecoNumero = opcion.cecoNumero;
+      if (opcion.proyecto) option.dataset.proyecto = opcion.proyecto;
+      select.appendChild(option);
+    });
+  }
+
+  function actualizarCecoNumeroDesdeSeleccion() {
+    const opcion = el.centroCosto.options[el.centroCosto.selectedIndex];
+    el.cecoNumero.value = opcion && opcion.dataset.cecoNumero ? opcion.dataset.cecoNumero : '';
+  }
+
+  function normalizarComparacion(valor) {
+    return String(valor || '').trim().toUpperCase();
+  }
+
+  function seleccionarCentroCostoPreferido(centrosCosto, preferencia) {
+    if (!preferencia) return;
+
+    const numeroPreferido = normalizarComparacion(preferencia.cecoNumero);
+    const nombrePreferido = normalizarComparacion(preferencia.cecoNombre);
+    const encontrado = centrosCosto.find(function (c) {
+      return (numeroPreferido && normalizarComparacion(c.cecoNumero) === numeroPreferido) ||
+        (nombrePreferido && normalizarComparacion(c.centroCosto).indexOf(nombrePreferido) !== -1);
+    });
+
+    if (encontrado) {
+      el.centroCosto.value = encontrado.centroCosto;
+      actualizarCecoNumeroDesdeSeleccion();
+      marcarAutocompletado(el.centroCosto);
+      marcarAutocompletado(el.cecoNumero);
+    } else if (preferencia.cecoNumero) {
+      el.cecoNumero.value = preferencia.cecoNumero;
+      marcarAutocompletado(el.cecoNumero);
+    }
+  }
+
+  function cargarCatalogos() {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res.ok) {
+          toast(res.message, 'error');
+          return;
+        }
+
+        llenarSelect(el.tipoEquipo, res.result.tiposEquipo.map(function (v) {
+          return { value: v, label: v };
+        }), 'Selecciona...');
+
+        llenarSelect(el.tipoProblema, res.result.tiposProblema.map(function (v) {
+          return { value: v, label: v };
+        }), 'Selecciona...');
+
+        llenarSelect(el.prioridad, res.result.prioridades.map(function (v) {
+          return { value: v, label: v };
+        }), 'Selecciona...');
+
+        llenarSelect(el.empresaDelGrupo, Object.keys(res.result.empresas).map(function (k) {
+          return { value: res.result.empresas[k], label: res.result.empresas[k] };
+        }), 'Selecciona...');
+      })
+      .withFailureHandler(function () {
+        toast('No se pudo cargar el formulario. Recarga la pagina.', 'error');
+      })
+      .ReporteService_obtenerCatalogos();
+  }
+
+  function cargarCentrosCosto(empresa) {
+    const requestId = ++cecoConsultaSecuencia;
+    if (!empresa) {
+      el.centroCosto.disabled = true;
+      llenarSelect(el.centroCosto, [], 'Selecciona primero la empresa...');
+      el.cecoNumero.value = '';
+      return;
+    }
+
+    el.centroCosto.disabled = true;
+    llenarSelect(el.centroCosto, [], 'Cargando...');
+    el.cecoNumero.value = '';
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (requestId !== cecoConsultaSecuencia) return;
+        if (!res.ok) {
+          el.centroCosto.disabled = true;
+          llenarSelect(el.centroCosto, [], 'No se pudo cargar...');
+          toast(res.message, 'error');
+          return;
+        }
+
+        const centrosCosto = res.result.centrosCosto || [];
+        if (!centrosCosto.length) {
+          el.centroCosto.disabled = true;
+          llenarSelect(el.centroCosto, [], 'No hay centros de costo disponibles...');
+          el.cecoNumero.value = cecoPreferido && cecoPreferido.cecoNumero ? cecoPreferido.cecoNumero : '';
+          toast('No se encontraron centros de costo activos para la empresa seleccionada.', 'info');
+          return;
+        }
+
+        llenarSelect(el.centroCosto, centrosCosto.map(function (c) {
+          return {
+            value: c.centroCosto,
+            label: c.centroCosto,
+            cecoNumero: c.cecoNumero || c.ceco,
+            proyecto: c.proyecto
+          };
+        }), 'Selecciona...');
+        el.centroCosto.disabled = false;
+        seleccionarCentroCostoPreferido(centrosCosto, cecoPreferido);
+        cecoPreferido = null;
+        actualizarProgreso();
+      })
+      .withFailureHandler(function () {
+        if (requestId !== cecoConsultaSecuencia) return;
+        el.centroCosto.disabled = true;
+        llenarSelect(el.centroCosto, [], 'No se pudo cargar...');
+        el.cecoNumero.value = cecoPreferido && cecoPreferido.cecoNumero ? cecoPreferido.cecoNumero : '';
+        toast('No se pudo cargar el catalogo de centros de costo.', 'error');
+      })
+      .PadronService_listarCecoActivos(empresa);
+  }
+
+  function buscarDni(dni, opciones) {
+    opciones = opciones || {};
+    const forzar = !!opciones.forzar;
+    const mostrarErrorLongitud = !!opciones.mostrarErrorLongitud;
+    const reintentoLongitud = !!opciones.reintentoLongitud;
+    dni = normalizarDni(dni);
+    el.dni.value = dni;
+
+    el.dniAyuda.textContent = '';
+    el.dniAyuda.className = 'ayuda';
+
+    if (dni.length !== dniLength) {
+      if (forzar && !reintentoLongitud) {
+        setTimeout(function () {
+          sincronizarCamposNumericos();
+          buscarDni(el.dni.value, {
+            forzar: true,
+            mostrarErrorLongitud: mostrarErrorLongitud,
+            reintentoLongitud: true
+          });
+        }, 180);
+        return;
+      }
+
+      if (mostrarErrorLongitud) {
+        el.dniAyuda.textContent = construirMensajeDniInvalido(el.dni.value);
+        el.dniAyuda.className = 'ayuda alerta alerta-warn';
+      }
+      return;
+    }
+
+    if (dniEnConsulta === dni) return;
+    if (!forzar && ultimoDniConsultado === dni) return;
+
+    const requestId = ++dniConsultaSecuencia;
+    dniEnConsulta = dni;
+    ultimoDniConsultado = dni;
+    el.btnBuscarDni.disabled = true;
+    el.btnBuscarDni.classList.add('is-loading');
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (requestId !== dniConsultaSecuencia || normalizarDni(el.dni.value) !== dni) return;
+        dniEnConsulta = '';
+        el.btnBuscarDni.disabled = false;
+        el.btnBuscarDni.classList.remove('is-loading');
+
+        if (!res.ok) {
+          el.dniAyuda.textContent = res.message;
+          el.dniAyuda.className = 'ayuda alerta alerta-warn';
+          return;
+        }
+
+        el.nombreCompleto.value = res.result.nombreCompleto || '';
+        el.cargo.value = res.result.cargo || '';
+        if (res.result.movil) el.movil.value = normalizarMovil(res.result.movil);
+        el.proyectoSede.value = res.result.proyecto || '';
+        el.empresaDelGrupo.value = res.result.empresa || '';
+        el.cecoNumero.value = res.result.cecoNumero || '';
+        cecoPreferido = {
+          cecoNumero: res.result.cecoNumero || '',
+          cecoNombre: res.result.cecoNombre || ''
+        };
+        [el.nombreCompleto, el.cargo, el.movil, el.proyectoSede, el.empresaDelGrupo, el.cecoNumero].forEach(marcarAutocompletado);
+        el.dniAyuda.textContent = 'Datos encontrados en el padron. Completa tu movil antes de enviar.';
+        el.dniAyuda.className = 'ayuda alerta alerta-ok';
+        cargarCentrosCosto(el.empresaDelGrupo.value);
+        actualizarProgreso();
+      })
+      .withFailureHandler(function () {
+        if (requestId !== dniConsultaSecuencia) return;
+        dniEnConsulta = '';
+        el.btnBuscarDni.disabled = false;
+        el.btnBuscarDni.classList.remove('is-loading');
+        toast('Error de comunicacion con el servidor.', 'error');
+      })
+      .PadronService_buscarPorDni(dni);
+  }
+
+  el.dni.addEventListener('input', function () {
+    el.dni.value = normalizarDni(el.dni.value);
+    const dni = el.dni.value;
+
+    if (dni.length < dniLength) {
+      dniConsultaSecuencia++;
+      ultimoDniConsultado = '';
+      dniEnConsulta = '';
+      el.btnBuscarDni.disabled = false;
+      el.btnBuscarDni.classList.remove('is-loading');
+      if (el.dniAyuda.classList.contains('alerta')) {
+        el.dniAyuda.textContent = '';
+        el.dniAyuda.className = 'ayuda';
+      }
+      return;
+    }
+
+    programarBusquedaDni({ forzar: false, mostrarErrorLongitud: false, delayMs: dniAutoBusquedaDelayMs });
+  });
+
+  el.dni.addEventListener('change', function () {
+    sincronizarCamposNumericos();
+    if (el.dni.value.length === dniLength) {
+      programarBusquedaDni({ forzar: false, mostrarErrorLongitud: false, delayMs: 0 });
+    }
+  });
+
+  el.dni.addEventListener('blur', function () {
+    sincronizarCamposNumericos();
+    if (el.dni.value.length === dniLength) {
+      programarBusquedaDni({ forzar: false, mostrarErrorLongitud: false, delayMs: 0 });
+    }
+  });
+
+  el.dni.addEventListener('compositionend', function () {
+    sincronizarCamposNumericos();
+    if (el.dni.value.length === dniLength) {
+      programarBusquedaDni({ forzar: false, mostrarErrorLongitud: false, delayMs: 0 });
+    }
+  });
+
+  el.movil.addEventListener('input', function () {
+    el.movil.value = normalizarMovil(el.movil.value);
+  });
+
+  el.empresaDelGrupo.addEventListener('change', function () {
+    cecoPreferido = null;
+    cargarCentrosCosto(el.empresaDelGrupo.value);
+  });
+
+  el.tipoEquipo.addEventListener('change', function () {
+    actualizarVisibilidadAnydesk();
+  });
+
+  el.tipoProblema.addEventListener('change', function () {
+    if (!el.slaModal.hidden) actualizarSlaModal();
+    evaluarAperturaAutomaticaSla();
+  });
+
+  el.prioridad.addEventListener('change', function () {
+    if (!el.slaModal.hidden) actualizarSlaModal();
+    evaluarAperturaAutomaticaSla();
+  });
+
+  el.centroCosto.addEventListener('change', function () {
+    actualizarCecoNumeroDesdeSeleccion();
+  });
+
+  el.btnVerSla.addEventListener('click', abrirSlaModal);
+
+  el.btnCerrarSla.addEventListener('click', cerrarSlaModal);
+
+  el.slaModal.addEventListener('click', function (event) {
+    if (event.target === el.slaModal) cerrarSlaModal();
+  });
+
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && !el.slaModal.hidden) cerrarSlaModal();
+  });
+
+  el.btnBuscarDni.addEventListener('click', function () {
+    sincronizarCamposNumericos();
+    programarBusquedaDni({ forzar: true, mostrarErrorLongitud: true, delayMs: 80 });
+  });
+
+  function validarFrontend() {
+    const requeridos = [
+      [normalizarDni(el.dni.value).length === dniLength, 'Ingresa un DNI valido (' + dniLength + ' digitos).'],
+      [normalizarMovil(el.movil.value).length === movilLength, 'Ingresa un movil valido (' + movilLength + ' digitos).'],
+      [!!el.nombreCompleto.value.trim(), 'Ingresa el nombre completo.'],
+      [!!el.cargo.value.trim(), 'Ingresa el cargo.'],
+      [!!el.proyectoSede.value.trim(), 'Ingresa el area o proyecto / sede.'],
+      [!!el.empresaDelGrupo.value, 'Selecciona la empresa del grupo.'],
+      [!!el.centroCosto.value, 'Selecciona el centro de costo (CECO).'],
+      [!!el.tipoEquipo.value, 'Selecciona el tipo de equipo.'],
+      [!!el.activoAfectado.value.trim(), 'Ingresa el activo afectado.'],
+      [!!el.tipoProblema.value, 'Selecciona el tipo de problema.'],
+      [!!el.prioridad.value, 'Selecciona la prioridad.'],
+      [!!el.descripcion.value.trim(), 'Describe la incidencia.']
+    ];
+
+    const fallo = requeridos.find(function (regla) {
+      return !regla[0];
+    });
+
+    return fallo ? fallo[1] : null;
+  }
+
+  el.btnEnviar.addEventListener('click', function () {
+    sincronizarCamposNumericos();
+    setTimeout(function () {
+      sincronizarCamposNumericos();
+      const errorFrontend = validarFrontend();
+      if (errorFrontend) {
+        toast(errorFrontend, 'error');
+        return;
+      }
+
+      const payload = {
+        dni: normalizarDni(el.dni.value),
+        nombreCompleto: el.nombreCompleto.value,
+        cargo: el.cargo.value,
+        movil: normalizarMovil(el.movil.value),
+        proyectoSede: el.proyectoSede.value,
+        centroCosto: el.centroCosto.value,
+        cecoNumero: el.cecoNumero.value,
+        empresaDelGrupo: el.empresaDelGrupo.value,
+        tipoEquipo: el.tipoEquipo.value,
+        activoAfectado: el.activoAfectado.value,
+        tipoProblema: el.tipoProblema.value,
+        prioridad: el.prioridad.value,
+        descripcion: el.descripcion.value,
+        anydeskId: el.anydeskId.value,
+        anydeskPassword: el.anydeskPassword.value
+      };
+
+      el.btnEnviar.disabled = true;
+      loading(true);
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          loading(false);
+          el.btnEnviar.disabled = false;
+
+          if (!res.ok) {
+            toast(res.message, 'error');
+            return;
+          }
+
+          el.ticketId.textContent = res.result.idRegistro;
+          showView('view-ok');
+        })
+        .withFailureHandler(function () {
+          loading(false);
+          el.btnEnviar.disabled = false;
+          toast('Error de comunicacion con el servidor.', 'error');
+        })
+        .ReporteService_crearReporte(payload);
+    }, 180);
+  });
+
+  el.btnNuevoReporte.addEventListener('click', function () {
+    document.querySelectorAll('#view-form input, #view-form textarea').forEach(function (campo) {
+      campo.value = '';
+    });
+
+    document.querySelectorAll('#view-form select').forEach(function (campo) {
+      campo.value = '';
+    });
+
+    if (dniAutoBusquedaTimer) {
+      clearTimeout(dniAutoBusquedaTimer);
+      dniAutoBusquedaTimer = null;
+    }
+    dniConsultaSecuencia++;
+    ultimoDniConsultado = '';
+    dniEnConsulta = '';
+    el.btnBuscarDni.disabled = false;
+    el.btnBuscarDni.classList.remove('is-loading');
+    el.centroCosto.disabled = true;
+    llenarSelect(el.centroCosto, [], 'Selecciona primero la empresa...');
+    el.cecoNumero.value = '';
+    cecoPreferido = null;
+    ultimaClaveSlaAutoMostrada = '';
+    actualizarVisibilidadAnydesk();
+    el.dniAyuda.textContent = '';
+    el.dniAyuda.className = 'ayuda';
+    actualizarProgreso();
+    showView('view-form');
+  });
+
+  cargarCatalogos();
+  actualizarVisibilidadAnydesk();
+  actualizarProgreso();
+})();
+</script>

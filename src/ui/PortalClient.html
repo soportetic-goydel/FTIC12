@@ -1,0 +1,792 @@
+<script>
+(function () {
+  const pollingMs = <?= CONFIG.TRACKING.POLLING_MS ?>;
+  const terminalStatuses = <?= JSON.stringify(CONFIG.TRACKING.TERMINAL_STATUSES) ?>;
+  const supportEmail = '<?= CONFIG.APP.SUPPORT_EMAIL ?>';
+  const dniLength = Number(<?= CONFIG.VALIDATION.DNI_LENGTH ?>);
+  let trackingPollingHandle = null;
+  let ultimoTrackingPayload = null;
+  let adminAccessCode = '';
+  let adminTickets = [];
+  let adminTicketSeleccionado = null;
+  let adminEstadosRegistro = [];
+  let adminEstadosFinales = [];
+  let adminAccionesTomadas = [];
+  let adminQuickFilter = 'TODOS';
+
+  const el = {
+    btnIrNuevoReporte: document.getElementById('btnIrNuevoReporte'),
+    btnIrSeguimiento: document.getElementById('btnIrSeguimiento'),
+    btnIrAdmin: document.getElementById('btnIrAdmin'),
+    btnVolverInicioDesdeFormulario: document.getElementById('btnVolverInicioDesdeFormulario'),
+    btnVolverInicioDesdeTracking: document.getElementById('btnVolverInicioDesdeTracking'),
+    btnVolverInicioDesdeAdmin: document.getElementById('btnVolverInicioDesdeAdmin'),
+    btnVolverInicioDesdeOk: document.getElementById('btnVolverInicioDesdeOk'),
+    btnConsultarTicketCreado: document.getElementById('btnConsultarTicketCreado'),
+    btnConsultarTracking: document.getElementById('btnConsultarTracking'),
+    btnConsultarOtroTracking: document.getElementById('btnConsultarOtroTracking'),
+    btnCopiarTicket: document.getElementById('btnCopiarTicket'),
+    btnCopiarTracking: document.getElementById('btnCopiarTracking'),
+    adminLoginPanel: document.getElementById('adminLoginPanel'),
+    adminDashboard: document.getElementById('adminDashboard'),
+    adminAccessCode: document.getElementById('adminAccessCode'),
+    btnAdminEntrar: document.getElementById('btnAdminEntrar'),
+    btnAdminRefrescar: document.getElementById('btnAdminRefrescar'),
+    adminStats: document.getElementById('adminStats'),
+    adminQuickFilters: document.getElementById('adminQuickFilters'),
+    adminFiltroTexto: document.getElementById('adminFiltroTexto'),
+    adminFiltroEstado: document.getElementById('adminFiltroEstado'),
+    adminTicketList: document.getElementById('adminTicketList'),
+    adminDetail: document.getElementById('adminDetail'),
+    statusTimeline: document.getElementById('statusTimeline'),
+    trackingIdRegistro: document.getElementById('trackingIdRegistro'),
+    trackingDni: document.getElementById('trackingDni'),
+    trackingResultId: document.getElementById('trackingResultId'),
+    trackingResultEstado: document.getElementById('trackingResultEstado'),
+    trackingResultGrid: document.getElementById('trackingResultGrid'),
+    trackingDescripcion: document.getElementById('trackingDescripcion'),
+    trackingCierrePanel: document.getElementById('trackingCierrePanel'),
+    trackingCierreGrid: document.getElementById('trackingCierreGrid'),
+    trackingPdfActions: document.getElementById('trackingPdfActions'),
+    trackingPollingNote: document.getElementById('trackingPollingNote'),
+    ticketId: document.getElementById('ticketId')
+  };
+
+  function limpiarPolling() {
+    if (trackingPollingHandle) {
+      clearInterval(trackingPollingHandle);
+      trackingPollingHandle = null;
+    }
+  }
+
+  function irA(viewId) {
+    limpiarPolling();
+    showView(viewId);
+  }
+
+  function escapeHtml(valor) {
+    return String(valor || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function toLowerSafe(valor) {
+    return String(valor || '').trim().toLowerCase();
+  }
+
+  function getStatusBucket(estado) {
+    const normalizado = toLowerSafe(estado);
+    if (normalizado === 'abierto') return 'open';
+    if (normalizado === 'resuelto') return 'closed';
+    return 'progress';
+  }
+
+  function actualizarTimeline(bucket) {
+    const pasos = Array.prototype.slice.call(el.statusTimeline.querySelectorAll('.timeline-step'));
+    pasos.forEach(function (paso) { paso.classList.remove('is-done', 'is-current'); });
+
+    if (bucket === 'closed') {
+      pasos.forEach(function (paso) { paso.classList.add('is-done'); });
+      return;
+    }
+
+    const indiceActual = bucket === 'progress' ? 1 : 0;
+    pasos.forEach(function (paso, i) {
+      if (i < indiceActual) paso.classList.add('is-done');
+      else if (i === indiceActual) paso.classList.add('is-current');
+    });
+  }
+
+  function setStatusBadge(estado) {
+    const bucket = getStatusBucket(estado);
+    el.trackingResultEstado.textContent = estado || 'Sin estado';
+    el.trackingResultEstado.className = 'status-badge';
+    el.trackingResultEstado.classList.add(bucket === 'open' ? 'is-open' : bucket === 'closed' ? 'is-closed' : 'is-progress');
+    actualizarTimeline(bucket);
+  }
+
+  function copiarAlPortapapeles(texto, boton) {
+    if (!texto) return;
+
+    function marcarCopiado() {
+      boton.classList.add('copied');
+      toast('Numero de ticket copiado.', 'ok');
+      setTimeout(function () { boton.classList.remove('copied'); }, 1500);
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(texto).then(marcarCopiado, function () {
+        toast('No se pudo copiar el ticket.', 'error');
+      });
+      return;
+    }
+
+    const temp = document.createElement('textarea');
+    temp.value = texto;
+    temp.style.position = 'fixed';
+    temp.style.opacity = '0';
+    document.body.appendChild(temp);
+    temp.select();
+    try {
+      document.execCommand('copy');
+      marcarCopiado();
+    } catch (err) {
+      toast('No se pudo copiar el ticket.', 'error');
+    }
+    document.body.removeChild(temp);
+  }
+
+  function renderItems(container, items) {
+    container.innerHTML = '';
+    items.forEach(function (item) {
+      const div = document.createElement('div');
+      div.className = 'tracking-item';
+      div.innerHTML =
+        '<div class="tracking-item-label">' + item.label + '</div>' +
+        '<div class="tracking-item-value">' + (item.value || 'No disponible') + '</div>';
+      container.appendChild(div);
+    });
+  }
+
+  function renderTracking(res) {
+    const data = res.result;
+    el.trackingResultId.textContent = data.idRegistro;
+    setStatusBadge(data.estadoRegistro);
+
+    renderItems(el.trackingResultGrid, [
+      { label: 'Fecha de reporte', value: data.fechaHoraReporte },
+      { label: 'Empresa', value: data.empresaDelGrupo },
+      { label: 'Solicitante', value: data.nombreCompletoSolicitante },
+      { label: 'Cargo', value: data.cargoSolicitante },
+      { label: 'Proyecto / Sede', value: data.proyectoSede },
+      { label: 'Centro de costo', value: data.centroCosto },
+      { label: 'Tipo de equipo', value: data.tipoEquipo },
+      { label: 'Tipo de problema', value: data.tipoProblema },
+      { label: 'Prioridad', value: data.prioridadUsuario },
+      { label: 'SLA aplicado', value: data.slaAplicado },
+      { label: 'Activo afectado', value: data.activoAfectado }
+    ]);
+
+    el.trackingDescripcion.textContent = data.descripcionIncidencia || 'Sin descripcion disponible.';
+
+    const mostrarCierre = !!(data.fechaHoraCierre || data.tecnicoResponsable || data.diagnosticoTic || data.accionTomada || data.estadoFinal);
+    el.trackingCierrePanel.style.display = mostrarCierre ? 'block' : 'none';
+
+    if (mostrarCierre) {
+      renderItems(el.trackingCierreGrid, [
+        { label: 'Fecha de cierre', value: data.fechaHoraCierre },
+        { label: 'Tecnico responsable', value: data.tecnicoResponsable },
+        { label: 'Diagnostico TIC', value: data.diagnosticoTic },
+        { label: 'Accion tomada', value: data.accionTomada },
+        { label: 'Estado final', value: data.estadoFinal }
+      ]);
+    } else {
+      el.trackingCierreGrid.innerHTML = '';
+    }
+
+    if (data.linkPdfReporte) {
+      el.trackingPdfActions.innerHTML = '<a class="btn-main tracking-pdf-link" href="' + escapeHtml(data.linkPdfReporte) + '" target="_blank" rel="noopener">Ver PDF consolidado del ticket</a>';
+      el.trackingPdfActions.style.display = 'flex';
+    } else {
+      el.trackingPdfActions.innerHTML = '';
+      el.trackingPdfActions.style.display = 'none';
+    }
+
+    if (terminalStatuses.indexOf(data.estadoRegistro) !== -1) {
+      limpiarPolling();
+      el.trackingPollingNote.textContent = 'El ticket esta en estado terminal. Si necesitas soporte adicional, contacta a ' + supportEmail + '.';
+    } else {
+      el.trackingPollingNote.textContent = 'El portal actualiza esta consulta automaticamente cada ' + Math.round(pollingMs / 1000) + ' segundos mientras el ticket siga abierto.';
+    }
+
+    showView('view-track-result');
+  }
+
+  function consultarTracking(silencioso) {
+    const payload = silencioso ? ultimoTrackingPayload : {
+      idRegistro: String(el.trackingIdRegistro.value || '').trim(),
+      dni: String(el.trackingDni.value || '').trim()
+    };
+
+    if (!payload || !payload.idRegistro || !payload.dni) {
+      toast('Completa el numero de ticket y el DNI del solicitante.', 'error');
+      return;
+    }
+
+    if (!silencioso) {
+      ultimoTrackingPayload = payload;
+      loading(true);
+    }
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!silencioso) loading(false);
+        if (!res.ok) {
+          if (!silencioso) toast(res.message, 'error');
+          limpiarPolling();
+          return;
+        }
+
+        renderTracking(res);
+
+        if (terminalStatuses.indexOf(res.result.estadoRegistro) === -1 && !trackingPollingHandle) {
+          trackingPollingHandle = setInterval(function () {
+            consultarTracking(true);
+          }, pollingMs);
+        }
+      })
+      .withFailureHandler(function () {
+        if (!silencioso) loading(false);
+        if (!silencioso) toast('No se pudo consultar el ticket.', 'error');
+        limpiarPolling();
+      })
+      .ReporteService_obtenerSeguimientoPublico(payload);
+  }
+
+  function prepararConsultaUltimoTicket() {
+    const ticketId = String(el.ticketId.textContent || '').trim();
+    if (!ticketId) {
+      toast('No se encontro el ticket recien generado.', 'error');
+      return;
+    }
+
+    el.trackingIdRegistro.value = ticketId;
+    irA('view-tracking');
+    toast('Ingresa el DNI del solicitante para consultar este ticket.', 'info');
+  }
+
+  function adminEstadoClase(estado) {
+    const bucket = getStatusBucket(estado);
+    return bucket === 'open' ? 'is-open' : bucket === 'closed' ? 'is-closed' : 'is-progress';
+  }
+
+  function adminTicketEstaBloqueado(ticket) {
+    return !!ticket && !!ticket.esTerminal;
+  }
+
+  function adminTicketContactoVisible(ticket) {
+    return !!ticket && !!ticket.contactoVisible;
+  }
+
+  function adminResumenDesdeTickets(tickets) {
+    return tickets.reduce(function (resumen, ticket) {
+      resumen.total++;
+      if (ticket.esTerminal) {
+        resumen.resueltos++;
+      } else {
+        resumen.activos++;
+        if (ticket.alertaSla === 'VENCIDO') resumen.vencidosSla++;
+      }
+      return resumen;
+    }, {
+      total: 0,
+      activos: 0,
+      vencidosSla: 0,
+      resueltos: 0
+    });
+  }
+
+  function adminFormatearHoras(valor) {
+    if (typeof valor !== 'number' || isNaN(valor)) return 'No disponible';
+    return valor.toFixed(2) + ' h';
+  }
+
+  function adminFormatearHorasRestantes(ticket) {
+    if (!ticket || typeof ticket.horasRestantes !== 'number' || isNaN(ticket.horasRestantes)) return 'No disponible';
+    if (ticket.horasRestantes >= 0) return ticket.horasRestantes.toFixed(2) + ' h';
+    return Math.abs(ticket.horasRestantes).toFixed(2) + ' h';
+  }
+
+  function adminLabelHorasRestantes(ticket) {
+    if (!ticket || typeof ticket.horasRestantes !== 'number' || isNaN(ticket.horasRestantes)) return 'Horas restantes';
+    return ticket.horasRestantes >= 0 ? 'Horas restantes' : 'Horas vencidas';
+  }
+
+  function adminBadgeSlaClase(ticket) {
+    return ticket && ticket.indicadorSla === 'Vencido' ? 'is-overdue' : 'is-ok';
+  }
+
+  function adminParseFechaSeguro(valor) {
+    if (!valor) return null;
+    const texto = String(valor || '').trim();
+    if (!texto) return null;
+
+    let match = texto.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+    if (match) {
+      return new Date(
+        Number(match[1]),
+        Number(match[2]) - 1,
+        Number(match[3]),
+        Number(match[4] || 0),
+        Number(match[5] || 0),
+        Number(match[6] || 0)
+      );
+    }
+
+    match = texto.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+    if (match) {
+      return new Date(
+        Number(match[3]),
+        Number(match[2]) - 1,
+        Number(match[1]),
+        Number(match[4] || 0),
+        Number(match[5] || 0),
+        Number(match[6] || 0)
+      );
+    }
+
+    const fecha = new Date(texto);
+    return isNaN(fecha.getTime()) ? null : fecha;
+  }
+
+  function adminCompararTickets(a, b) {
+    if (!!a.esTerminal !== !!b.esTerminal) return a.esTerminal ? 1 : -1;
+
+    if (!a.esTerminal && !b.esTerminal) {
+      const aVencido = a.alertaSla === 'VENCIDO' ? 1 : 0;
+      const bVencido = b.alertaSla === 'VENCIDO' ? 1 : 0;
+      if (aVencido !== bVencido) return bVencido - aVencido;
+
+      const horasA = typeof a.horasTranscurridas === 'number' ? a.horasTranscurridas : -1;
+      const horasB = typeof b.horasTranscurridas === 'number' ? b.horasTranscurridas : -1;
+      if (horasA !== horasB) return horasB - horasA;
+
+      const stampA = typeof a.reportTimestamp === 'number' ? a.reportTimestamp : Number.MAX_SAFE_INTEGER;
+      const stampB = typeof b.reportTimestamp === 'number' ? b.reportTimestamp : Number.MAX_SAFE_INTEGER;
+      if (stampA !== stampB) return stampA - stampB;
+    }
+
+    const cierreA = adminParseFechaSeguro(a.fechaHoraCierre);
+    const cierreB = adminParseFechaSeguro(b.fechaHoraCierre);
+    if (cierreA && cierreB && cierreA.getTime() !== cierreB.getTime()) {
+      return cierreB.getTime() - cierreA.getTime();
+    }
+
+    return String(a.idRegistro || '').localeCompare(String(b.idRegistro || ''));
+  }
+
+  function adminRenderQuickFilters() {
+    if (!el.adminQuickFilters) return;
+    Array.prototype.forEach.call(el.adminQuickFilters.querySelectorAll('.admin-quick-filter'), function (boton) {
+      boton.classList.toggle('is-active', boton.dataset.quickFilter === adminQuickFilter);
+    });
+  }
+
+  function adminSincronizarTicketActualizado(actualizado) {
+    adminTickets = adminTickets.map(function (ticket) {
+      return ticket.idRegistro === actualizado.idRegistro ? actualizado : ticket;
+    });
+    adminTickets.sort(adminCompararTickets);
+    adminTicketSeleccionado = actualizado;
+    adminRenderStats(adminResumenDesdeTickets(adminTickets));
+    adminRenderLista();
+    adminRenderDetalle(adminTicketSeleccionado);
+  }
+
+  function adminRenderOpciones(select, opciones, textoInicial) {
+    const valorActual = select.value;
+    select.innerHTML = '<option value="">' + textoInicial + '</option>';
+    opciones.forEach(function (opcion) {
+      const option = document.createElement('option');
+      option.value = opcion;
+      option.textContent = opcion;
+      select.appendChild(option);
+    });
+    select.value = opciones.indexOf(valorActual) !== -1 ? valorActual : '';
+  }
+
+  function adminRenderStats(resumen) {
+    const items = [
+      { label: 'Total', value: resumen.total || 0 },
+      { label: 'Activos', value: resumen.activos || 0 },
+      { label: 'Vencidos SLA', value: resumen.vencidosSla || 0 },
+      { label: 'Resueltos', value: resumen.resueltos || 0 }
+    ];
+
+    el.adminStats.innerHTML = items.map(function (item) {
+      return '<div class="admin-stat">' +
+        '<div class="admin-stat-label">' + escapeHtml(item.label) + '</div>' +
+        '<div class="admin-stat-value">' + escapeHtml(item.value) + '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  function adminFiltrarTickets() {
+    const texto = String(el.adminFiltroTexto.value || '').trim().toLowerCase();
+    const estado = String(el.adminFiltroEstado.value || '').trim();
+
+    return adminTickets.filter(function (ticket) {
+      const coincideEstado = !estado || ticket.estadoRegistro === estado;
+      const coincideQuickFilter =
+        adminQuickFilter === 'TODOS' ||
+        (adminQuickFilter === 'ACTIVOS' && !ticket.esTerminal) ||
+        (adminQuickFilter === 'VENCIDOS' && ticket.alertaSla === 'VENCIDO') ||
+        (adminQuickFilter === 'RESUELTOS' && ticket.esTerminal);
+
+      const bolsa = [
+        ticket.idRegistro,
+        ticket.nombreCompletoSolicitante,
+        ticket.empresaDelGrupo,
+        ticket.activoAfectado,
+        ticket.tipoProblema,
+        ticket.prioridadUsuario,
+        ticket.estadoRegistro,
+        ticket.indicadorSla
+      ].join(' ').toLowerCase();
+      const coincideTexto = !texto || bolsa.indexOf(texto) !== -1;
+
+      return coincideEstado && coincideQuickFilter && coincideTexto;
+    });
+  }
+
+  function adminRenderLista() {
+    const tickets = adminFiltrarTickets();
+    if (!tickets.length) {
+      el.adminTicketList.innerHTML = '<div class="admin-empty">No hay tickets para los filtros seleccionados.</div>';
+      return;
+    }
+
+    el.adminTicketList.innerHTML = tickets.map(function (ticket) {
+      const activo = adminTicketSeleccionado && adminTicketSeleccionado.idRegistro === ticket.idRegistro ? ' is-active' : '';
+      const indicadorSla = ticket.indicadorSla
+        ? '<span class="sla-badge ' + adminBadgeSlaClase(ticket) + '">' + escapeHtml(ticket.indicadorSla) + '</span>'
+        : '';
+      const tituloSolicitante = adminTicketContactoVisible(ticket)
+        ? escapeHtml(ticket.nombreCompletoSolicitante || 'Solicitante no disponible')
+        : 'Solicitante oculto hasta atender';
+
+      return '<button type="button" class="admin-ticket-card' + activo + '" data-ticket-id="' + escapeHtml(ticket.idRegistro) + '">' +
+        '<div class="admin-ticket-head">' +
+        '<span class="admin-ticket-id">' + escapeHtml(ticket.idRegistro) + '</span>' +
+        '<div class="admin-ticket-tags">' +
+        '<span class="status-badge ' + adminEstadoClase(ticket.estadoRegistro) + '">' + escapeHtml(ticket.estadoRegistro || 'Sin estado') + '</span>' +
+        indicadorSla +
+        '</div>' +
+        '</div>' +
+        '<div class="admin-ticket-title">' + tituloSolicitante + '</div>' +
+        '<div class="admin-ticket-meta">' + escapeHtml(ticket.empresaDelGrupo) + ' · ' + escapeHtml(ticket.tipoProblema) + ' · ' + escapeHtml(ticket.fechaHoraReporte) + '</div>' +
+        '<div class="admin-ticket-meta"><span class="admin-priority">' + escapeHtml(ticket.prioridadUsuario || 'Sin prioridad') + '</span> ' + escapeHtml(ticket.activoAfectado) + '</div>' +
+        '</button>';
+    }).join('');
+  }
+
+  function adminRenderDetalle(ticket) {
+    if (!ticket) {
+      el.adminDetail.innerHTML = '<div class="admin-empty">Selecciona un ticket del consolidado para gestionarlo.</div>';
+      return;
+    }
+
+    const campo = function (label, value) {
+      return '<div class="admin-field">' +
+        '<div class="admin-field-label">' + escapeHtml(label) + '</div>' +
+        '<div class="admin-field-value">' + escapeHtml(value || 'No disponible') + '</div>' +
+        '</div>';
+    };
+
+    const bloqueado = adminTicketEstaBloqueado(ticket);
+    const contactoVisible = adminTicketContactoVisible(ticket);
+    const esAbiertoSinAtender = ticket.estadoRegistro === 'Abierto' && !contactoVisible;
+    const indicadorSla = ticket.indicadorSla || 'No disponible';
+    const estadosPermitidos = ticket.estadosPermitidos || adminEstadosRegistro;
+    const gestionHtml = bloqueado
+      ? '<div class="admin-management">' +
+        '<div class="admin-lock">' +
+        '<div class="admin-lock-icon">!</div>' +
+        '<div>' +
+        '<div class="admin-lock-title">Regla fija: ticket en estado terminal</div>' +
+        '<p>Una vez que el ticket queda resuelto, no se puede reabrir ni modificar desde el portal TIC. Si el usuario necesita soporte adicional, debe registrarse una nueva solicitud.</p>' +
+        '</div>' +
+        '</div>' +
+        '<div class="admin-placeholder-title">Gestion TIC registrada</div>' +
+        '<div class="admin-detail-grid">' +
+        campo('Fecha de cierre', ticket.fechaHoraCierre) +
+        campo('Tecnico responsable', ticket.tecnicoResponsable) +
+        campo('Accion tomada', ticket.accionTomada) +
+        campo('Estado final', ticket.estadoFinal) +
+        campo('MTTR', adminFormatearHoras(ticket.mttrHoras)) +
+        campo('Cumplio SLA', ticket.cumplioSla || indicadorSla) +
+        '</div>' +
+        '<div class="tracking-panel">' +
+        '<div class="tracking-panel-title">Diagnostico TIC / resolucion</div>' +
+        '<p class="tracking-panel-copy">' + escapeHtml(ticket.diagnosticoTic || 'No disponible') + '</p>' +
+        '</div>' +
+        '<div class="admin-action-row">' +
+        (ticket.linkPdfReporte
+          ? '<a class="btn-main admin-pdf-link" href="' + escapeHtml(ticket.linkPdfReporte) + '" target="_blank" rel="noopener">Abrir PDF F-TIC-12</a>'
+          : '<div class="admin-helper-note">Este ticket ya esta en estado terminal, pero todavia no tiene un PDF generado.</div><button type="button" class="btn-main admin-pdf-link" id="btnAdminGenerarPdf">Generar PDF F-TIC-12</button>') +
+        '</div>' +
+        '</div>'
+      : esAbiertoSinAtender
+      ? '<div class="admin-management">' +
+        '<div class="tracking-note">Este ticket sigue en <strong>Abierto</strong>. Para ver el nombre y los datos de contacto del usuario, primero debes asumir la atencion.</div>' +
+        '<button type="button" class="btn-main" id="btnAdminAtenderTicket">Atender ticket</button>' +
+        '<div class="admin-helper-note">Al atender, el ticket pasara a <strong>En Atencion</strong> y se habilitara la comunicacion con el usuario.</div>' +
+        '</div>'
+      : '<div class="admin-management">' +
+        '<div class="admin-placeholder-title">Gestion TIC</div>' +
+        '<div class="admin-management-grid">' +
+        '<div><label class="lbl" for="adminEstadoRegistro">Estado del ticket</label><select class="inp" id="adminEstadoRegistro"></select></div>' +
+        '<div><label class="lbl" for="adminTecnicoResponsable">Tecnico responsable</label><input class="inp" type="text" id="adminTecnicoResponsable"></div>' +
+        '<div><label class="lbl" for="adminAccionTomada">Accion tomada</label><select class="inp" id="adminAccionTomada"></select></div>' +
+        '<div><label class="lbl" for="adminEstadoFinal">Estado final</label><select class="inp" id="adminEstadoFinal"></select></div>' +
+        '</div>' +
+        '<div class="tracking-note">Flujo controlado: Abierto -> En Atencion -> Resuelto. No se permite cerrar directo desde Abierto.</div>' +
+        '<label class="lbl" for="adminDiagnosticoTic">Diagnostico TIC / resolucion</label>' +
+        '<textarea class="inp" id="adminDiagnosticoTic" placeholder="Describe el diagnostico, resolucion o avance tecnico"></textarea>' +
+        '<button type="button" class="btn-main" id="btnAdminGuardarTicket">Guardar gestion del ticket</button>' +
+        '</div>';
+
+    el.adminDetail.innerHTML =
+      '<div class="admin-detail-title">' + escapeHtml(ticket.idRegistro) + '</div>' +
+      '<div class="admin-detail-sub">' + escapeHtml(ticket.fechaHoraReporte) + ' · ' + escapeHtml(ticket.empresaDelGrupo) + '</div>' +
+      '<div class="admin-detail-grid">' +
+      campo('Estado actual', ticket.estadoRegistro) +
+      campo('SLA aplicado', ticket.slaAplicado) +
+      campo('Indicador SLA', indicadorSla) +
+      campo('Horas transcurridas', adminFormatearHoras(ticket.horasTranscurridas)) +
+      campo(adminLabelHorasRestantes(ticket), adminFormatearHorasRestantes(ticket)) +
+      campo('Solicitante', contactoVisible ? ticket.nombreCompletoSolicitante : 'Se mostrara al atender') +
+      campo('DNI / Movil', contactoVisible ? ((ticket.dniSolicitante || '') + ' / ' + (ticket.movilSolicitante || '')) : 'Se mostrara al atender') +
+      campo('Proyecto / CECO', (ticket.proyectoSede || '') + ' / ' + (ticket.centroCosto || '')) +
+      campo('Equipo / Activo', (ticket.tipoEquipo || '') + ' / ' + (ticket.activoAfectado || '')) +
+      campo('Problema / Prioridad', (ticket.tipoProblema || '') + ' / ' + (ticket.prioridadUsuario || '')) +
+      '</div>' +
+      '<div class="tracking-panel">' +
+      '<div class="tracking-panel-title">Descripcion reportada</div>' +
+      '<p class="tracking-panel-copy">' + escapeHtml(ticket.descripcionIncidencia || 'Sin descripcion.') + '</p>' +
+      '</div>' +
+      gestionHtml;
+
+    if (bloqueado) {
+      const btnGenerarPdf = document.getElementById('btnAdminGenerarPdf');
+      if (btnGenerarPdf) btnGenerarPdf.addEventListener('click', adminGenerarPdfTicket);
+      return;
+    }
+
+    if (esAbiertoSinAtender) {
+      const btnAtender = document.getElementById('btnAdminAtenderTicket');
+      if (btnAtender) btnAtender.addEventListener('click', adminAtenderTicket);
+      return;
+    }
+
+    const estadoSelect = document.getElementById('adminEstadoRegistro');
+    const accionSelect = document.getElementById('adminAccionTomada');
+    const estadoFinalSelect = document.getElementById('adminEstadoFinal');
+    adminRenderOpciones(estadoSelect, estadosPermitidos, 'Selecciona estado...');
+    adminRenderOpciones(accionSelect, adminAccionesTomadas, 'Selecciona accion...');
+    adminRenderOpciones(estadoFinalSelect, adminEstadosFinales, 'Selecciona estado final...');
+    estadoSelect.value = ticket.estadoRegistro || '';
+    accionSelect.value = ticket.accionTomada || '';
+    estadoFinalSelect.value = ticket.estadoFinal || '';
+    document.getElementById('adminTecnicoResponsable').value = ticket.tecnicoResponsable || '';
+    document.getElementById('adminDiagnosticoTic').value = ticket.diagnosticoTic || '';
+    document.getElementById('btnAdminGuardarTicket').addEventListener('click', adminGuardarTicket);
+  }
+
+  function adminSeleccionarTicket(idRegistro) {
+    adminTicketSeleccionado = adminTickets.find(function (ticket) {
+      return ticket.idRegistro === idRegistro;
+    }) || null;
+    adminRenderLista();
+    adminRenderDetalle(adminTicketSeleccionado);
+  }
+
+  function adminCargarTickets() {
+    if (!adminAccessCode) {
+      toast('Ingresa el codigo de acceso TIC.', 'error');
+      return;
+    }
+
+    const seleccionadoActual = adminTicketSeleccionado ? adminTicketSeleccionado.idRegistro : '';
+    loading(true);
+    google.script.run
+      .withSuccessHandler(function (res) {
+        loading(false);
+        if (!res.ok) {
+          toast(res.message, 'error');
+          return;
+        }
+
+        adminTickets = res.result.tickets || [];
+        adminEstadosRegistro = res.result.estadosRegistro || [];
+        adminEstadosFinales = res.result.estadosFinales || [];
+        adminAccionesTomadas = res.result.accionesTomadas || [];
+        el.adminLoginPanel.hidden = true;
+        el.adminDashboard.hidden = false;
+        adminRenderOpciones(el.adminFiltroEstado, adminEstadosRegistro, 'Todos los estados');
+        adminRenderQuickFilters();
+        adminRenderStats(res.result.resumen || {});
+        adminRenderLista();
+
+        if (adminTickets.length) {
+          const ticketInicial = adminTickets.find(function (ticket) {
+            return ticket.idRegistro === seleccionadoActual;
+          }) || adminTickets[0];
+          adminSeleccionarTicket(ticketInicial.idRegistro);
+        } else {
+          adminRenderDetalle(null);
+        }
+      })
+      .withFailureHandler(function () {
+        loading(false);
+        toast('No se pudo cargar el panel TIC.', 'error');
+      })
+      .ReporteService_adminListarTickets({ codigoAcceso: adminAccessCode, limite: 200 });
+  }
+
+  function adminGuardarTicket() {
+    if (!adminTicketSeleccionado) return;
+    if (adminTicketEstaBloqueado(adminTicketSeleccionado)) {
+      toast('Regla fija: un ticket en estado terminal no se puede reabrir ni modificar.', 'error');
+      return;
+    }
+
+    const payload = {
+      codigoAcceso: adminAccessCode,
+      idRegistro: adminTicketSeleccionado.idRegistro,
+      estadoRegistro: document.getElementById('adminEstadoRegistro').value,
+      tecnicoResponsable: document.getElementById('adminTecnicoResponsable').value,
+      diagnosticoTic: document.getElementById('adminDiagnosticoTic').value,
+      accionTomada: document.getElementById('adminAccionTomada').value,
+      estadoFinal: document.getElementById('adminEstadoFinal').value
+    };
+
+    loading(true);
+    google.script.run
+      .withSuccessHandler(function (res) {
+        loading(false);
+        if (!res.ok) {
+          toast(res.message, 'error');
+          return;
+        }
+
+        adminSincronizarTicketActualizado(res.result.ticket);
+        toast(res.message, res.result.pdf && res.result.pdf.intentado && !res.result.pdf.ok ? 'info' : 'ok');
+      })
+      .withFailureHandler(function () {
+        loading(false);
+        toast('No se pudo guardar la gestion del ticket.', 'error');
+      })
+      .ReporteService_adminActualizarTicket(payload);
+  }
+
+  function adminAtenderTicket() {
+    if (!adminTicketSeleccionado) return;
+    if (adminTicketEstaBloqueado(adminTicketSeleccionado)) {
+      toast('Este ticket ya esta en estado terminal.', 'error');
+      return;
+    }
+
+    if (adminTicketSeleccionado.estadoRegistro !== 'Abierto') {
+      toast('Este ticket ya fue tomado o gestionado.', 'info');
+      return;
+    }
+
+    loading(true);
+    google.script.run
+      .withSuccessHandler(function (res) {
+        loading(false);
+        if (!res.ok) {
+          toast(res.message, 'error');
+          return;
+        }
+
+        adminSincronizarTicketActualizado(res.result.ticket);
+        toast('Ticket tomado correctamente. Ya puedes ver los datos de contacto y continuar la gestion.', 'ok');
+      })
+      .withFailureHandler(function () {
+        loading(false);
+        toast('No se pudo tomar el ticket.', 'error');
+      })
+      .ReporteService_adminActualizarTicket({
+        codigoAcceso: adminAccessCode,
+        idRegistro: adminTicketSeleccionado.idRegistro,
+        estadoRegistro: 'En Atencion',
+        tecnicoResponsable: '',
+        diagnosticoTic: '',
+        accionTomada: '',
+        estadoFinal: ''
+      });
+  }
+
+  function adminGenerarPdfTicket() {
+    if (!adminTicketSeleccionado) return;
+    if (!adminTicketEstaBloqueado(adminTicketSeleccionado)) {
+      toast('El PDF solo se puede generar cuando el ticket este resuelto.', 'error');
+      return;
+    }
+
+    loading(true);
+    google.script.run
+      .withSuccessHandler(function (res) {
+        loading(false);
+        if (!res.ok) {
+          toast(res.message, 'error');
+          return;
+        }
+
+        adminSincronizarTicketActualizado(res.result.ticket);
+        toast(res.message, 'ok');
+      })
+      .withFailureHandler(function () {
+        loading(false);
+        toast('No se pudo generar el PDF F-TIC-12.', 'error');
+      })
+      .ReporteService_adminRegenerarPdfTicket({
+        codigoAcceso: adminAccessCode,
+        idRegistro: adminTicketSeleccionado.idRegistro
+      });
+  }
+
+  el.trackingDni.addEventListener('input', function () {
+    el.trackingDni.value = el.trackingDni.value.replace(/\D/g, '').slice(0, dniLength);
+  });
+
+  el.btnIrNuevoReporte.addEventListener('click', function () { irA('view-form'); });
+  el.btnIrSeguimiento.addEventListener('click', function () { irA('view-tracking'); });
+  el.btnIrAdmin.addEventListener('click', function () { irA('view-admin'); });
+  el.btnVolverInicioDesdeFormulario.addEventListener('click', function () { irA('view-home'); });
+  el.btnVolverInicioDesdeTracking.addEventListener('click', function () { irA('view-home'); });
+  el.btnVolverInicioDesdeAdmin.addEventListener('click', function () { irA('view-home'); });
+  el.btnVolverInicioDesdeOk.addEventListener('click', function () { irA('view-home'); });
+  el.btnConsultarTracking.addEventListener('click', function () { consultarTracking(false); });
+  el.btnConsultarOtroTracking.addEventListener('click', function () { irA('view-tracking'); });
+  el.btnConsultarTicketCreado.addEventListener('click', prepararConsultaUltimoTicket);
+  el.btnCopiarTicket.addEventListener('click', function () {
+    copiarAlPortapapeles(el.ticketId.textContent.trim(), el.btnCopiarTicket);
+  });
+  el.btnCopiarTracking.addEventListener('click', function () {
+    copiarAlPortapapeles(el.trackingResultId.textContent.trim(), el.btnCopiarTracking);
+  });
+  el.btnAdminEntrar.addEventListener('click', function () {
+    adminAccessCode = String(el.adminAccessCode.value || '').trim();
+    adminCargarTickets();
+  });
+  el.adminAccessCode.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter') {
+      adminAccessCode = String(el.adminAccessCode.value || '').trim();
+      adminCargarTickets();
+    }
+  });
+  el.btnAdminRefrescar.addEventListener('click', adminCargarTickets);
+  el.adminFiltroTexto.addEventListener('input', adminRenderLista);
+  el.adminFiltroEstado.addEventListener('change', adminRenderLista);
+  el.adminTicketList.addEventListener('click', function (event) {
+    const card = event.target.closest('.admin-ticket-card');
+    if (!card) return;
+    adminSeleccionarTicket(card.dataset.ticketId);
+  });
+  if (el.adminQuickFilters) {
+    el.adminQuickFilters.addEventListener('click', function (event) {
+      const boton = event.target.closest('.admin-quick-filter');
+      if (!boton) return;
+      adminQuickFilter = boton.dataset.quickFilter || 'TODOS';
+      adminRenderQuickFilters();
+      adminRenderLista();
+    });
+  }
+})();
+</script>

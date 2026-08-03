@@ -1,0 +1,128 @@
+<div class="toolbar-row">
+  <button type="button" class="btn-back-home" id="btnVolverInicioDesdeFormulario">
+    <span aria-hidden="true">&larr;</span>
+    <span>Volver al inicio</span>
+  </button>
+</div>
+
+<div class="form-progress-wrap">
+  <div class="form-progress-head">
+    <span>Progreso del formulario</span>
+    <span id="formProgressTexto">0%</span>
+  </div>
+  <div class="form-progress-track">
+    <div class="form-progress-fill" id="formProgressFill" style="width:0%"></div>
+  </div>
+</div>
+
+<div class="seccion">
+  <div class="seccion-titulo"><span class="seccion-numero">1</span>Datos del solicitante</div>
+
+  <label class="lbl" for="dni">DNI</label>
+  <div class="dni-row">
+    <input class="inp" type="tel" id="dni" maxlength="<?= CONFIG.VALIDATION.DNI_LENGTH ?>" inputmode="numeric" pattern="[0-9]*" placeholder="Ej. 12345678">
+    <button type="button" class="btn-buscar" id="btnBuscarDni">
+      <span class="btn-texto">Buscar</span>
+      <span class="btn-spinner" aria-hidden="true"></span>
+    </button>
+  </div>
+  <div class="ayuda" id="dniAyuda"></div>
+
+  <label class="lbl" for="nombreCompleto">Nombre completo</label>
+  <input class="inp" type="text" id="nombreCompleto" placeholder="Apellidos y nombres">
+
+  <label class="lbl" for="cargo">Cargo</label>
+  <input class="inp" type="text" id="cargo">
+
+  <label class="lbl" for="movil">Movil</label>
+  <input class="inp" type="tel" id="movil" maxlength="<?= CONFIG.VALIDATION.MOVIL_LENGTH ?>" inputmode="numeric" pattern="[0-9]*" placeholder="Ej. 987654321">
+
+  <label class="lbl" for="proyectoSede">Area o proyecto / Sede</label>
+  <input class="inp" type="text" id="proyectoSede" placeholder="Ej. TDEM LIMA LOGISTICA">
+
+  <label class="lbl" for="empresaDelGrupo">Empresa del grupo</label>
+  <select class="inp" id="empresaDelGrupo">
+    <option value="">Selecciona...</option>
+  </select>
+
+  <label class="lbl" for="centroCosto">Centro de Costo (CECO)</label>
+  <select class="inp" id="centroCosto" disabled>
+    <option value="">Selecciona primero la empresa...</option>
+  </select>
+
+  <label class="lbl" for="cecoNumero">Numero CECO</label>
+  <input class="inp" type="text" id="cecoNumero" placeholder="Se completa automaticamente" readonly>
+
+  <label class="lbl" for="tipoEquipo">Tipo de equipo</label>
+  <select class="inp" id="tipoEquipo">
+    <option value="">Selecciona...</option>
+  </select>
+</div>
+
+<div class="seccion">
+  <div class="seccion-titulo seccion-titulo-con-accion">
+    <span class="seccion-titulo-texto"><span class="seccion-numero">2</span>Detalles de la incidencia</span>
+    <button type="button" class="btn-sla" id="btnVerSla">
+      <span class="btn-sla-icon" aria-hidden="true">i</span>
+      <span>
+        <span class="btn-sla-main">Ver SLA</span>
+        <span class="btn-sla-sub">tiempo de atencion</span>
+      </span>
+    </button>
+  </div>
+
+  <label class="lbl" for="activoAfectado">Activo afectado</label>
+  <input class="inp" type="text" id="activoAfectado" placeholder="N de serie, codigo de inventario o descripcion breve">
+
+  <label class="lbl" for="tipoProblema">Tipo de problema</label>
+  <select class="inp" id="tipoProblema">
+    <option value="">Selecciona...</option>
+  </select>
+
+  <label class="lbl" for="prioridad">Prioridad</label>
+  <select class="inp" id="prioridad">
+    <option value="">Selecciona...</option>
+  </select>
+
+  <label class="lbl" for="descripcion">Descripcion de la incidencia</label>
+  <textarea class="inp" id="descripcion" rows="4" placeholder="Describe el problema con el mayor detalle posible"></textarea>
+
+  <div class="anydesk-box" id="anydeskBox" hidden>
+    <div class="anydesk-titulo">Acceso remoto AnyDesk (opcional, solo si aplica)</div>
+    <div class="anydesk-ayuda">Visible solo para equipos que normalmente pueden usar acceso remoto.</div>
+    <label class="lbl" for="anydeskId">ID de AnyDesk</label>
+    <input class="inp" type="text" id="anydeskId">
+    <label class="lbl" for="anydeskPassword">Password temporal</label>
+    <input class="inp" type="password" id="anydeskPassword" autocomplete="new-password">
+  </div>
+</div>
+
+<div class="sla-modal-backdrop" id="slaModal" hidden>
+  <div class="sla-modal" role="dialog" aria-modal="true" aria-labelledby="slaModalTitulo">
+    <button type="button" class="sla-modal-close" id="btnCerrarSla" aria-label="Cerrar ventana SLA">&times;</button>
+    <div class="sla-modal-kicker">Acuerdo de atencion</div>
+    <div class="sla-modal-title" id="slaModalTitulo">Tiempo estimado de atencion TIC</div>
+    <p class="sla-modal-copy">
+      El tiempo de atencion se calcula segun la prioridad seleccionada. El tipo de problema ayuda a clasificar la incidencia para el equipo TIC.
+    </p>
+
+    <div class="sla-current">
+      <div>
+        <span class="sla-current-label">Tipo de problema</span>
+        <strong id="slaTipoProblemaActual">No seleccionado</strong>
+      </div>
+      <div>
+        <span class="sla-current-label">Prioridad</span>
+        <strong id="slaPrioridadActual">No seleccionada</strong>
+      </div>
+      <div>
+        <span class="sla-current-label">Atencion estimada</span>
+        <strong id="slaTiempoActual">Selecciona una prioridad</strong>
+      </div>
+    </div>
+
+    <div class="sla-list" id="slaLista"></div>
+  </div>
+</div>
+
+<button type="button" class="btn-main" id="btnEnviar">Enviar reporte</button>

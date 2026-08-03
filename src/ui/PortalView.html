@@ -1,0 +1,250 @@
+<div class="portal-shell">
+  <div id="overlay" style="display:none;" aria-hidden="true" role="status" aria-live="polite">
+    <div class="spinner"></div>
+    <span>Procesando...</span>
+  </div>
+
+  <div id="toast" aria-live="polite"></div>
+
+  <div class="portal-card">
+    <div class="portal-hero">
+      <div class="portal-hero-copy">
+        <div class="portal-kicker">Portal F-TIC-12</div>
+        <h1 class="portal-title">Reporte y seguimiento de incidencias TIC</h1>
+        <p class="portal-subtitle">Registra una incidencia, consulta el estado de tu ticket y manten el seguimiento desde un solo portal institucional.</p>
+      </div>
+      <div class="portal-hero-meta">
+        <div class="hero-pill">Formulario digital</div>
+        <div class="hero-pill">MC-F-TIC-12</div>
+        <div class="hero-pill">Soporte TIC</div>
+      </div>
+    </div>
+
+    <div class="portal-body">
+      <div id="view-home" class="view active">
+        <div class="home-grid">
+          <button type="button" class="action-card action-primary stagger-in" id="btnIrNuevoReporte" style="--stagger:0">
+            <span class="action-icon action-icon-primary" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            </span>
+            <span class="action-eyebrow">Nuevo incidente</span>
+            <span class="action-title">Registrar un reporte</span>
+            <span class="action-copy">Completa el formato digital F-TIC-12 y genera tu numero de ticket.</span>
+            <span class="action-go" aria-hidden="true">Comenzar
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+          </button>
+
+          <button type="button" class="action-card stagger-in" id="btnIrSeguimiento" style="--stagger:1">
+            <span class="action-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2.2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            </span>
+            <span class="action-eyebrow">Seguimiento</span>
+            <span class="action-title">Consultar estado</span>
+            <span class="action-copy">Consulta el estado de tu ticket con el numero de registro y tu DNI.</span>
+            <span class="action-go" aria-hidden="true">Consultar
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+          </button>
+
+          <button type="button" class="action-card stagger-in" id="btnIrAdmin" style="--stagger:2">
+            <span class="action-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="2.2"/><path d="M9 9h6M9 13h6M9 17h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </span>
+            <span class="action-eyebrow">Gestion TIC</span>
+            <span class="action-title">Acceso administrativo</span>
+            <span class="action-copy">Orientacion para el equipo TIC mientras se implementa la vista interna del portal.</span>
+            <span class="action-go" aria-hidden="true">Ver mas
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+          </button>
+        </div>
+
+        <div class="info-grid">
+          <div class="info-card stagger-in" style="--stagger:3">
+            <div class="info-title">Como funciona</div>
+            <p>Busca tu DNI, completa tu movil, registra la incidencia y recibe tu ticket.</p>
+          </div>
+          <div class="info-card stagger-in" style="--stagger:4">
+            <div class="info-title">Consulta publica</div>
+            <p>El seguimiento usa numero de ticket + DNI, porque la matriz real no trabaja con correo del solicitante.</p>
+          </div>
+          <div class="info-card stagger-in" style="--stagger:5">
+            <div class="info-title">Estado actual</div>
+            <p>El portal ya cubre inicio, registro y seguimiento publico basados en la matriz real.</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="view-form" class="view">
+        <div class="section-head">
+          <div>
+            <div class="section-kicker">Nuevo incidente</div>
+            <div class="section-title">Registro del reporte</div>
+          </div>
+        </div>
+        <?!= include('src/modules/reporte/ReporteView'); ?>
+      </div>
+
+      <div id="view-ok" class="view">
+        <div class="check-wrap">
+          <div class="check-circle">&#10003;</div>
+          <div class="check-title">Reporte registrado</div>
+          <div class="check-sub">Tu incidencia fue registrada correctamente.</div>
+          <div class="ticket-row">
+            <div class="ticket-id" id="ticketId"></div>
+            <button type="button" class="btn-copy" id="btnCopiarTicket" title="Copiar numero de ticket" aria-label="Copiar numero de ticket">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M5 15V6a1 1 0 0 1 1-1h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+          <button type="button" class="btn-main" id="btnConsultarTicketCreado">Consultar este ticket</button>
+          <button type="button" class="btn-sec" id="btnNuevoReporte">Registrar otro reporte</button>
+          <button type="button" class="btn-back-home link-center" id="btnVolverInicioDesdeOk">
+            <span aria-hidden="true">&larr;</span>
+            <span>Volver al inicio</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="view-tracking" class="view">
+        <div class="section-head">
+          <div>
+            <div class="section-kicker">Seguimiento</div>
+            <div class="section-title">Consulta tu ticket</div>
+          </div>
+          <button type="button" class="btn-back-home" id="btnVolverInicioDesdeTracking">
+            <span aria-hidden="true">&larr;</span>
+            <span>Volver al inicio</span>
+          </button>
+        </div>
+
+        <label class="lbl" for="trackingIdRegistro">Numero de ticket</label>
+        <input class="inp" type="text" id="trackingIdRegistro" placeholder="Ej. REG-F-TIC-12-2026-00001">
+
+        <label class="lbl" for="trackingDni">DNI del solicitante</label>
+        <input class="inp" type="tel" id="trackingDni" maxlength="<?= CONFIG.VALIDATION.DNI_LENGTH ?>" inputmode="numeric" pattern="[0-9]*" placeholder="Ej. 12345678">
+
+        <div class="tracking-actions">
+          <button type="button" class="btn-main" id="btnConsultarTracking">Consultar ticket</button>
+        </div>
+
+        <div class="tracking-note">
+          La consulta publica se valida con el numero de ticket y el DNI del solicitante registrado.
+        </div>
+      </div>
+
+      <div id="view-track-result" class="view">
+        <div class="section-head">
+          <div>
+            <div class="section-kicker">Seguimiento</div>
+            <div class="section-title">Estado actual del ticket</div>
+          </div>
+          <button type="button" class="btn-back-home" id="btnConsultarOtroTracking">
+            <span aria-hidden="true">&larr;</span>
+            <span>Consultar otro ticket</span>
+          </button>
+        </div>
+
+        <div class="tracking-status-row">
+          <div>
+            <div class="tracking-ticket-label">Ticket</div>
+            <div class="ticket-row">
+              <div class="tracking-ticket-id" id="trackingResultId"></div>
+              <button type="button" class="btn-copy" id="btnCopiarTracking" title="Copiar numero de ticket" aria-label="Copiar numero de ticket">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M5 15V6a1 1 0 0 1 1-1h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="status-badge" id="trackingResultEstado"></div>
+        </div>
+
+        <div class="status-timeline" id="statusTimeline">
+          <div class="timeline-step" data-step="registrado">
+            <span class="timeline-dot"></span>
+            <span class="timeline-label">Registrado</span>
+          </div>
+          <div class="timeline-step" data-step="atencion">
+            <span class="timeline-dot"></span>
+            <span class="timeline-label">En atencion</span>
+          </div>
+          <div class="timeline-step" data-step="resuelto">
+            <span class="timeline-dot"></span>
+            <span class="timeline-label">Resuelto</span>
+          </div>
+        </div>
+
+        <div class="tracking-grid" id="trackingResultGrid"></div>
+
+        <div class="tracking-panel">
+          <div class="tracking-panel-title">Descripcion reportada</div>
+          <p class="tracking-panel-copy" id="trackingDescripcion"></p>
+        </div>
+
+        <div class="tracking-panel" id="trackingCierrePanel" style="display:none;">
+          <div class="tracking-panel-title">Cierre tecnico</div>
+          <div class="tracking-closure-grid" id="trackingCierreGrid"></div>
+        </div>
+
+        <div class="tracking-action-row" id="trackingPdfActions" style="display:none;"></div>
+
+        <div class="tracking-note" id="trackingPollingNote"></div>
+      </div>
+
+      <div id="view-admin" class="view">
+        <div class="section-head">
+          <div>
+            <div class="section-kicker">Gestion TIC</div>
+            <div class="section-title">Acceso administrativo</div>
+          </div>
+          <button type="button" class="btn-back-home" id="btnVolverInicioDesdeAdmin">
+            <span aria-hidden="true">&larr;</span>
+            <span>Volver al inicio</span>
+          </button>
+        </div>
+
+        <div class="admin-login" id="adminLoginPanel">
+          <div class="admin-placeholder-title">Ingreso TIC</div>
+          <p>Ingresa la clave interna para visualizar el consolidado y gestionar estados de tickets.</p>
+          <label class="lbl" for="adminAccessCode">Codigo de acceso TIC</label>
+          <input class="inp" type="password" id="adminAccessCode" autocomplete="current-password" placeholder="Clave interna">
+          <button type="button" class="btn-main" id="btnAdminEntrar">Ingresar al panel</button>
+          <div class="tracking-note">Por seguridad, este panel requiere configurar la propiedad <strong>ADMIN_ACCESS_CODE</strong> en Apps Script.</div>
+        </div>
+
+        <div class="admin-dashboard" id="adminDashboard" hidden>
+          <div class="admin-toolbar">
+            <div>
+              <div class="admin-placeholder-title">Consolidado de tickets</div>
+              <p>Prioriza tickets activos, detecta vencimientos SLA y gestiona la resolucion desde el portal TIC.</p>
+            </div>
+            <button type="button" class="btn-admin-refresh" id="btnAdminRefrescar">Actualizar</button>
+          </div>
+
+          <div class="admin-stats" id="adminStats"></div>
+
+          <div class="admin-quick-filters" id="adminQuickFilters">
+            <button type="button" class="admin-quick-filter is-active" data-quick-filter="TODOS">Todos</button>
+            <button type="button" class="admin-quick-filter" data-quick-filter="ACTIVOS">Activos</button>
+            <button type="button" class="admin-quick-filter" data-quick-filter="VENCIDOS">Vencidos</button>
+            <button type="button" class="admin-quick-filter" data-quick-filter="RESUELTOS">Resueltos</button>
+          </div>
+
+          <div class="admin-filters">
+            <input class="inp" type="search" id="adminFiltroTexto" placeholder="Buscar por ticket, solicitante, empresa o activo">
+            <select class="inp" id="adminFiltroEstado">
+              <option value="">Todos los estados</option>
+            </select>
+          </div>
+
+          <div class="admin-workspace">
+            <div class="admin-ticket-list" id="adminTicketList"></div>
+
+            <div class="admin-detail" id="adminDetail">
+              <div class="admin-empty">Selecciona un ticket del consolidado para gestionarlo.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
