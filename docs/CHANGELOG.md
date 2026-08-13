@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-08-13
+### Corregido
+- Reemplazada la generacion del formato F-TIC-12 desde `Google Sheets -> PDF` por un nuevo flujo `HTML -> PDF`, eliminando la dependencia de una copia temporal del spreadsheet y el descalce de filas/casillas en la seccion 3.
+- Corregida la maquetacion del bloque `3. EVALUACION Y RESOLUCION (USO INTERNO TIC)`: el diagnostico TIC ahora se renderiza en un layout HTML fijo, sin empujar ni desalinear `Accion Tomada`, `Estado Final` ni el cierre tecnico.
+
+### Agregado
+- Nueva plantilla `src/templates/pdf/FTic12PdfTemplate.html` derivada del formato aprobado `F-TIC-12.html`, limpiada para quitar artefactos del exportado de Google Sheets (grilla, encabezados de filas/columnas y referencias `resources/...`) y conservando las lineas estructurales del documento.
+- Nuevo `FormatoService` basado en `HtmlService.createTemplateFromFile(...).evaluate().getAs(MimeType.PDF)`, con checkboxes estables por CSS y logo embebido en SVG inline.
+- Verificacion tecnica del flujo PDF actualizada en `autorizarServiciosPdf()` y `validarEstructuraProyecto()` para validar la plantilla HTML real y la escritura del PDF en Drive.
+
+### Documentado
+- Actualizadas `01_GUIA_GENERAL.md`, `02_GUIA_TECNICA.md` y `03_GUIA_OPERATIVA_Y_GOBIERNO.md` para reflejar que el PDF F-TIC-12 ahora se genera desde HTML y ya no desde una plantilla externa de Sheets.
+
 ## 2026-07-31
 ### Corregido
 - Ajustada la carga de centros de costo (`CECO`) para comparar la empresa seleccionada con `RAZON SOCIAL` usando aliases normalizados, evitando el descalce entre valores como `TDEM`/`TDEMSRL` y `GOYDEL`/`GOYDEL SAC`/`GOYDELSAC`.

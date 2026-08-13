@@ -11,13 +11,18 @@
     nombreCompleto: document.getElementById('nombreCompleto'),
     cargo: document.getElementById('cargo'),
     movil: document.getElementById('movil'),
+    correoElectronico: document.getElementById('correoElectronico'),
     proyectoSede: document.getElementById('proyectoSede'),
     empresaDelGrupo: document.getElementById('empresaDelGrupo'),
     centroCosto: document.getElementById('centroCosto'),
     cecoNumero: document.getElementById('cecoNumero'),
     tipoEquipo: document.getElementById('tipoEquipo'),
+    activoSeleccionadoId: document.getElementById('activoSeleccionadoId'),
     activoAfectado: document.getElementById('activoAfectado'),
+    activoGrid: document.getElementById('activoGrid'),
+    activoAyuda: document.getElementById('activoAyuda'),
     tipoProblema: document.getElementById('tipoProblema'),
+    tipoProblemaAyuda: document.getElementById('tipoProblemaAyuda'),
     prioridad: document.getElementById('prioridad'),
     descripcion: document.getElementById('descripcion'),
     btnVerSla: document.getElementById('btnVerSla'),
@@ -42,7 +47,10 @@
   let dniEnConsulta = '';
   let dniConsultaSecuencia = 0;
   let cecoConsultaSecuencia = 0;
+  let activosConsultaSecuencia = 0;
   let cecoPreferido = null;
+  let activosDisponibles = [];
+  let catalogoTiposProblemaPorActivo = {};
   let ultimaClaveSlaAutoMostrada = '';
   const slaPorPrioridad = {
     Baja: {
@@ -101,21 +109,8 @@
     return texto.toUpperCase().replace(/[^A-Z0-9]/g, '');
   }
 
-  function tipoEquipoPermiteAnydesk(tipoEquipo) {
-    const clave = normalizarClave(tipoEquipo);
-    return clave.indexOf('PCPORT') !== -1 ||
-      clave.indexOf('PCESCRITORIO') !== -1 ||
-      clave === 'SMARTPHONE';
-  }
-
   function actualizarVisibilidadAnydesk() {
-    const mostrar = tipoEquipoPermiteAnydesk(el.tipoEquipo.value);
-    el.anydeskBox.hidden = !mostrar;
-
-    if (!mostrar) {
-      el.anydeskId.value = '';
-      el.anydeskPassword.value = '';
-    }
+    el.anydeskBox.hidden = false;
   }
 
   function actualizarSlaModal() {
@@ -221,13 +216,12 @@
       normalizarMovil(el.movil.value).length === movilLength,
       !!el.nombreCompleto.value.trim(),
       !!el.cargo.value.trim(),
+      !!el.correoElectronico.value.trim(),
       !!el.proyectoSede.value.trim(),
       !!el.empresaDelGrupo.value,
       !!el.centroCosto.value,
-      !!el.tipoEquipo.value,
-      !!el.activoAfectado.value.trim(),
+      !!el.activoSeleccionadoId.value.trim(),
       !!el.tipoProblema.value,
-      !!el.prioridad.value,
       !!el.descripcion.value.trim()
     ];
 
@@ -235,6 +229,226 @@
     const porcentaje = Math.round((completos / campos.length) * 100);
     el.formProgressFill.style.width = porcentaje + '%';
     el.formProgressTexto.textContent = porcentaje + '%';
+  }
+
+  function obtenerActivoPorId(id) {
+    return activosDisponibles.find(function (activo) {
+      return String(activo.id || '') === String(id || '');
+    }) || null;
+  }
+
+  function resolverClaveCatalogoTipoProblema(activo) {
+    const assetKind = String(activo && activo.assetKind || '').toLowerCase();
+    if (assetKind === 'printer' || assetKind === 'scanner') return 'printscan';
+    if (assetKind === 'pc' || assetKind === 'smartphone' || assetKind === 'consulta' || assetKind === 'otro') return assetKind;
+    return '';
+  }
+
+  function resolverOpcionesTipoProblemaPorActivo(activo) {
+    const clave = resolverClaveCatalogoTipoProblema(activo);
+    return ((catalogoTiposProblemaPorActivo && catalogoTiposProblemaPorActivo[clave]) || []).map(function (opcion) {
+      return {
+        value: opcion.value,
+        label: opcion.label,
+        category: opcion.category,
+        examples: opcion.examples
+      };
+    });
+  }
+
+  function actualizarAyudaTipoProblema(activo, opciones) {
+    const opcionesVisibles = opciones || resolverOpcionesTipoProblemaPorActivo(activo);
+    const valorSeleccionado = el.tipoProblema.value || '';
+    const opcionSeleccionada = opcionesVisibles.find(function (opcion) {
+      return opcion.value === valorSeleccionado;
+    }) || null;
+
+    if (!activo) {
+      el.tipoProblemaAyuda.textContent = 'Selecciona primero el activo afectado para ver las categorias aplicables.';
+      return;
+    }
+
+    if (opcionSeleccionada && opcionSeleccionada.examples) {
+      el.tipoProblemaAyuda.textContent = opcionSeleccionada.examples;
+      return;
+    }
+
+    if (!opcionesVisibles.length) {
+      el.tipoProblemaAyuda.textContent = 'No se encontraron categorias configuradas para este activo.';
+      return;
+    }
+
+    el.tipoProblemaAyuda.textContent = 'Categorias para este activo: ' + opcionesVisibles.map(function (opcion) {
+      return opcion.label;
+    }).join(', ') + '.';
+  }
+
+  function resolverTipoEquipoDesdeActivo(activo) {
+    const kind = String(activo && activo.assetKind || '').toLowerCase();
+    if (kind === 'smartphone') return 'Smartphone';
+    if (kind === 'printer') return 'Impresora';
+    if (kind === 'scanner') return 'Escaner';
+    if (kind === 'consulta') return 'Programas';
+    if (kind === 'otro') return 'Otro';
+    if (kind === 'pc') return 'PC-Portatil';
+    return '';
+  }
+
+  function actualizarTipoProblemaPorActivo(activo) {
+    const valorActual = el.tipoProblema.value || '';
+    const opcionesPermitidas = resolverOpcionesTipoProblemaPorActivo(activo);
+    const activoSeleccionado = !!activo;
+
+    el.tipoProblema.disabled = !activoSeleccionado;
+    llenarSelect(el.tipoProblema, opcionesPermitidas, activoSeleccionado ? 'Selecciona...' : 'Selecciona primero un activo...');
+
+    const existeOpcion = opcionesPermitidas.some(function (opcion) {
+      return opcion.value === valorActual;
+    });
+
+    el.tipoProblema.value = existeOpcion ? valorActual : '';
+    actualizarAyudaTipoProblema(activo, opcionesPermitidas);
+
+    if (!el.slaModal.hidden) actualizarSlaModal();
+    evaluarAperturaAutomaticaSla();
+  }
+
+  function svgIconoActivo(iconKey) {
+    if (iconKey === 'phone') {
+      return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="7" y="2.75" width="10" height="18.5" rx="2.5" stroke="currentColor" stroke-width="1.9"/><circle cx="12" cy="17.75" r="1" fill="currentColor"/><path d="M10 5.75h4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>';
+    }
+    if (iconKey === 'printer') {
+      return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M7 8.5V4.5h10v4" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><rect x="4" y="8.5" width="16" height="8" rx="2.2" stroke="currentColor" stroke-width="1.9"/><path d="M7 13.5h10v6H7z" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><circle cx="17" cy="11.5" r="1" fill="currentColor"/></svg>';
+    }
+    if (iconKey === 'scanner') {
+      return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 8.5h14a2 2 0 0 1 2 2v2.5H3V10.5a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.9"/><path d="M6 13.5h12v5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 18.5z" stroke="currentColor" stroke-width="1.9"/><path d="M8 5h8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M9 17h6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>';
+    }
+    if (iconKey === 'consulta') {
+      return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.25" stroke="currentColor" stroke-width="1.9"/><path d="M9.75 9.25a2.33 2.33 0 1 1 3.74 1.87c-.96.73-1.49 1.21-1.49 2.13" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="16.85" r="1" fill="currentColor"/></svg>';
+    }
+    if (iconKey === 'otro') {
+      return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/></svg>';
+    }
+    return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="12" rx="2.5" stroke="currentColor" stroke-width="1.9"/><path d="M9 19h6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>';
+  }
+
+  function activosVirtualesFallback() {
+    return [
+      {
+        id: 'VIRTUAL|CONSULTA',
+        label: 'Consulta',
+        iconKey: 'consulta',
+        assetKind: 'consulta',
+        secondaryText: 'Usa esta opcion si tu incidente no corresponde a un equipo asignado.',
+        isVirtual: true,
+        canonicalLabel: 'Consulta'
+      },
+      {
+        id: 'VIRTUAL|OTRO',
+        label: 'Otros',
+        iconKey: 'otro',
+        assetKind: 'otro',
+        secondaryText: 'Usa esta opcion si necesitas registrar un caso excepcional.',
+        isVirtual: true,
+        canonicalLabel: 'Otros'
+      }
+    ];
+  }
+
+  function limpiarActivos(texto) {
+    activosConsultaSecuencia++;
+    activosDisponibles = [];
+    el.activoSeleccionadoId.value = '';
+    el.activoAfectado.value = '';
+    el.tipoEquipo.value = '';
+    el.activoGrid.innerHTML = '';
+    el.activoAyuda.textContent = texto || 'Ingresa tu DNI para cargar tus activos asignados.';
+    actualizarTipoProblemaPorActivo(null);
+    actualizarProgreso();
+  }
+
+  function seleccionarActivo(id) {
+    const activo = obtenerActivoPorId(id);
+    el.activoSeleccionadoId.value = activo ? activo.id : '';
+    el.activoAfectado.value = activo ? (activo.canonicalLabel || activo.label || '') : '';
+    el.tipoEquipo.value = activo ? resolverTipoEquipoDesdeActivo(activo) : '';
+    actualizarTipoProblemaPorActivo(activo);
+
+    Array.prototype.forEach.call(el.activoGrid.querySelectorAll('.activo-card'), function (card) {
+      card.classList.toggle('is-active', card.dataset.assetId === el.activoSeleccionadoId.value);
+      card.setAttribute('aria-selected', card.dataset.assetId === el.activoSeleccionadoId.value ? 'true' : 'false');
+    });
+
+    actualizarProgreso();
+  }
+
+  function renderActivos(activos, mensaje) {
+    activosDisponibles = activos || [];
+    el.activoSeleccionadoId.value = '';
+    el.activoAfectado.value = '';
+    el.activoGrid.innerHTML = '';
+    el.activoAyuda.textContent = mensaje || 'Selecciona un activo afectado.';
+    actualizarTipoProblemaPorActivo(null);
+
+    activosDisponibles.forEach(function (activo) {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'activo-card' + (activo.isVirtual ? ' is-virtual' : '');
+      card.dataset.assetId = activo.id || '';
+      card.setAttribute('role', 'option');
+      card.setAttribute('aria-selected', 'false');
+
+      const icon = document.createElement('span');
+      icon.className = 'activo-card-icon';
+      icon.setAttribute('aria-hidden', 'true');
+      icon.innerHTML = svgIconoActivo(activo.iconKey);
+
+      const copy = document.createElement('span');
+      copy.className = 'activo-card-copy';
+
+      const title = document.createElement('span');
+      title.className = 'activo-card-title';
+      title.textContent = activo.label || 'Activo';
+
+      const meta = document.createElement('span');
+      meta.className = 'activo-card-meta';
+      meta.textContent = activo.secondaryText || '';
+
+      copy.appendChild(title);
+      if (activo.secondaryText) copy.appendChild(meta);
+      card.appendChild(icon);
+      card.appendChild(copy);
+      el.activoGrid.appendChild(card);
+    });
+
+    actualizarProgreso();
+  }
+
+  function cargarActivosPorDni(dni) {
+    const requestId = ++activosConsultaSecuencia;
+    activosDisponibles = [];
+    el.activoSeleccionadoId.value = '';
+    el.activoAfectado.value = '';
+    el.activoGrid.innerHTML = '';
+    el.activoAyuda.textContent = 'Cargando activos asignados...';
+    actualizarProgreso();
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (requestId !== activosConsultaSecuencia || normalizarDni(el.dni.value) !== dni) return;
+        if (!res.ok) {
+          renderActivos(activosVirtualesFallback(), res.message || 'No se pudo cargar el catalogo completo de activos. Puedes registrar Consulta u Otros.');
+          toast(res.message || 'No se pudo cargar el catalogo de activos.', 'error');
+          return;
+        }
+        renderActivos((res.result && res.result.activos) || [], res.message);
+      })
+      .withFailureHandler(function () {
+        if (requestId !== activosConsultaSecuencia) return;
+        renderActivos(activosVirtualesFallback(), 'No se pudo cargar el catalogo completo de activos. Puedes registrar Consulta u Otros.');
+        toast('No se pudo cargar el catalogo de activos.', 'error');
+      })
+      .ReporteService_listarActivosPorDni({ dni: dni });
   }
 
   document.getElementById('view-form').addEventListener('input', actualizarProgreso);
@@ -294,10 +508,8 @@
           return { value: v, label: v };
         }), 'Selecciona...');
 
-        llenarSelect(el.tipoProblema, res.result.tiposProblema.map(function (v) {
-          return { value: v, label: v };
-        }), 'Selecciona...');
-
+        catalogoTiposProblemaPorActivo = res.result.tiposProblemaPorActivo || {};
+        actualizarTipoProblemaPorActivo(null);
         llenarSelect(el.prioridad, res.result.prioridades.map(function (v) {
           return { value: v, label: v };
         }), 'Selecciona...');
@@ -415,6 +627,7 @@
         el.btnBuscarDni.classList.remove('is-loading');
 
         if (!res.ok) {
+          limpiarActivos('No se pudieron cargar activos para este DNI.');
           el.dniAyuda.textContent = res.message;
           el.dniAyuda.className = 'ayuda alerta alerta-warn';
           return;
@@ -423,6 +636,7 @@
         el.nombreCompleto.value = res.result.nombreCompleto || '';
         el.cargo.value = res.result.cargo || '';
         if (res.result.movil) el.movil.value = normalizarMovil(res.result.movil);
+        if (res.result.correoElectronico) el.correoElectronico.value = String(res.result.correoElectronico || '').trim();
         el.proyectoSede.value = res.result.proyecto || '';
         el.empresaDelGrupo.value = res.result.empresa || '';
         el.cecoNumero.value = res.result.cecoNumero || '';
@@ -430,10 +644,15 @@
           cecoNumero: res.result.cecoNumero || '',
           cecoNombre: res.result.cecoNombre || ''
         };
-        [el.nombreCompleto, el.cargo, el.movil, el.proyectoSede, el.empresaDelGrupo, el.cecoNumero].forEach(marcarAutocompletado);
-        el.dniAyuda.textContent = 'Datos encontrados en el padron. Completa tu movil antes de enviar.';
+        [el.nombreCompleto, el.cargo, el.movil, el.correoElectronico, el.proyectoSede, el.empresaDelGrupo, el.cecoNumero].forEach(function (campo) {
+          if (campo && campo.value) marcarAutocompletado(campo);
+        });
+        el.dniAyuda.textContent = res.result.fuenteCorreoElectronico === 'REGISTRO'
+          ? 'Datos encontrados. El correo electronico se recupero del ultimo registro asociado a ese DNI.'
+          : 'Datos encontrados en el padron. La metadata interna del trabajador se completo automaticamente.';
         el.dniAyuda.className = 'ayuda alerta alerta-ok';
         cargarCentrosCosto(el.empresaDelGrupo.value);
+        cargarActivosPorDni(dni);
         actualizarProgreso();
       })
       .withFailureHandler(function () {
@@ -441,6 +660,7 @@
         dniEnConsulta = '';
         el.btnBuscarDni.disabled = false;
         el.btnBuscarDni.classList.remove('is-loading');
+        limpiarActivos('No se pudieron cargar activos para este DNI.');
         toast('Error de comunicacion con el servidor.', 'error');
       })
       .PadronService_buscarPorDni(dni);
@@ -456,6 +676,7 @@
       dniEnConsulta = '';
       el.btnBuscarDni.disabled = false;
       el.btnBuscarDni.classList.remove('is-loading');
+      limpiarActivos('Ingresa tu DNI para cargar tus activos asignados.');
       if (el.dniAyuda.classList.contains('alerta')) {
         el.dniAyuda.textContent = '';
         el.dniAyuda.className = 'ayuda';
@@ -501,6 +722,7 @@
   });
 
   el.tipoProblema.addEventListener('change', function () {
+    actualizarAyudaTipoProblema(obtenerActivoPorId(el.activoSeleccionadoId.value));
     if (!el.slaModal.hidden) actualizarSlaModal();
     evaluarAperturaAutomaticaSla();
   });
@@ -512,6 +734,12 @@
 
   el.centroCosto.addEventListener('change', function () {
     actualizarCecoNumeroDesdeSeleccion();
+  });
+
+  el.activoGrid.addEventListener('click', function (event) {
+    const card = event.target.closest('.activo-card');
+    if (!card) return;
+    seleccionarActivo(card.dataset.assetId);
   });
 
   el.btnVerSla.addEventListener('click', abrirSlaModal);
@@ -537,13 +765,12 @@
       [normalizarMovil(el.movil.value).length === movilLength, 'Ingresa un movil valido (' + movilLength + ' digitos).'],
       [!!el.nombreCompleto.value.trim(), 'Ingresa el nombre completo.'],
       [!!el.cargo.value.trim(), 'Ingresa el cargo.'],
+      [/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(el.correoElectronico.value || '').trim()), 'Ingresa un correo electronico valido.'],
       [!!el.proyectoSede.value.trim(), 'Ingresa el area o proyecto / sede.'],
-      [!!el.empresaDelGrupo.value, 'Selecciona la empresa del grupo.'],
-      [!!el.centroCosto.value, 'Selecciona el centro de costo (CECO).'],
-      [!!el.tipoEquipo.value, 'Selecciona el tipo de equipo.'],
-      [!!el.activoAfectado.value.trim(), 'Ingresa el activo afectado.'],
+      [!!el.empresaDelGrupo.value, 'No se pudo completar la empresa del trabajador desde el padron. Verifica el DNI o contacta a TIC.'],
+      [!!el.centroCosto.value, 'No se pudo completar el centro de costo del trabajador desde el padron. Verifica el DNI o contacta a TIC.'],
+      [!!el.activoSeleccionadoId.value.trim(), 'Selecciona uno de tus activos asignados, o usa Consulta u Otros.'],
       [!!el.tipoProblema.value, 'Selecciona el tipo de problema.'],
-      [!!el.prioridad.value, 'Selecciona la prioridad.'],
       [!!el.descripcion.value.trim(), 'Describe la incidencia.']
     ];
 
@@ -569,10 +796,12 @@
         nombreCompleto: el.nombreCompleto.value,
         cargo: el.cargo.value,
         movil: normalizarMovil(el.movil.value),
+        correoElectronico: String(el.correoElectronico.value || '').trim(),
         proyectoSede: el.proyectoSede.value,
         centroCosto: el.centroCosto.value,
         cecoNumero: el.cecoNumero.value,
         empresaDelGrupo: el.empresaDelGrupo.value,
+        activoSeleccionadoId: el.activoSeleccionadoId.value,
         tipoEquipo: el.tipoEquipo.value,
         activoAfectado: el.activoAfectado.value,
         tipoProblema: el.tipoProblema.value,
@@ -630,6 +859,7 @@
     el.cecoNumero.value = '';
     cecoPreferido = null;
     ultimaClaveSlaAutoMostrada = '';
+    limpiarActivos('Ingresa tu DNI para cargar tus activos asignados.');
     actualizarVisibilidadAnydesk();
     el.dniAyuda.textContent = '';
     el.dniAyuda.className = 'ayuda';
@@ -638,6 +868,7 @@
   });
 
   cargarCatalogos();
+  limpiarActivos('Ingresa tu DNI para cargar tus activos asignados.');
   actualizarVisibilidadAnydesk();
   actualizarProgreso();
 })();

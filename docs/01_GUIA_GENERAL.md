@@ -4,14 +4,14 @@
 Portal web para que cualquier colaborador del grupo economico registre una incidencia TIC, reciba un numero de ticket y consulte su estado sin depender del formato fisico F-TIC-12. El reporte queda registrado en la matriz de control `MC-F-TIC-12`, con trazabilidad hasta su cierre por parte de TIC.
 
 ## Alcance
-- **Fase 1.1 (iteracion actual):** portal publico con inicio, registro de incidente y consulta de estado. El intake corresponde a las secciones 1 y 2 del formato F-TIC-12 y crea un nuevo ticket en `MC-F-TIC-12` con `ESTADO_REGISTRO=Abierto`. La consulta publica usa `ID_REGISTRO + DNI`.
-- **Fuera de alcance de Fase 1:** vista de atencion tecnica (seccion 3), generacion de PDF con `TAGS-F-TIC-12`, guardado del PDF en Drive con nomenclatura `FTIC12-VS##-...`, y script de creacion de subcarpetas NIVEL III (CECO) dentro de `RG-F-TIC-12`.
+- **Fase 1.2 (iteracion actual):** portal publico con inicio, registro de incidente, consulta de estado y gestion TIC. El intake crea un nuevo ticket en `MC-F-TIC-12`, la gestion tecnica completa la seccion 3 y, al cierre, genera el PDF F-TIC-12 directamente desde una plantilla HTML guardandolo en Drive.
+- **Fuera de alcance actual:** script de creacion de subcarpetas NIVEL III (CECO) dentro de `RG-F-TIC-12`, nomenclatura final `FTIC12-VS##-...` para carpetas/documentos complementarios y automatizaciones documentales adicionales (`F-TIC-10`, `F-TIC-05`, evidencias).
 
 ## Usuarios
 | Rol | Como entra | Que ve |
 |---|---|---|
 | **Solicitante** | Enlace directo de la Web App | Inicio del portal, formulario de reporte y consulta de estado |
-| **TIC** | Hoja `MC-F-TIC-12` / futura vista de atencion | Todos los tickets, para diagnostico y cierre |
+| **TIC** | Vista administrativa del portal / Hoja `MC-F-TIC-12` | Todos los tickets, para diagnostico, cierre y PDF |
 
 ## Modulos
 - **portal** - inicio del sistema con accesos a nuevo incidente, consulta publica y orientacion para gestion TIC.
@@ -32,10 +32,11 @@ Portal web para que cualquier colaborador del grupo economico registre una incid
 - `[DB] PERSONAL GRUPO ECONOMICO` (padron unico) - pestañas `TDEMSRL`, `GOYDELSAC` (personal) y `CECO` (catalogo de centros de costo por razon social).
 - No se crea ningun padron ni catalogo local: todo se consume del padron unico.
 
-## Salidas del sistema (Fase 1.1)
+## Salidas del sistema (Fase 1.2)
 - Nuevo registro en `MC-F-TIC-12` por cada reporte.
 - Confirmacion en pantalla con el `ID_REGISTRO` generado.
 - Consulta publica del estado actual del ticket con datos controlados.
+- PDF F-TIC-12 generado desde HTML al cierre del ticket y enlazado en `LINK_PDF_REPORTE`.
 - Log de eventos (`LOG_EVENTOS`) y errores (`LOG_ERRORES`) dentro del mismo spreadsheet `MC-F-TIC-12`.
 
 ## Responsables
@@ -43,5 +44,5 @@ Portal web para que cualquier colaborador del grupo economico registre una incid
 - Fuente de personal y CECO: padron unico del grupo economico.
 
 ## Estado actual
-- **v1.1.0 (Fase 1.1):** portal con inicio, formulario de intake, registro en `MC-F-TIC-12` y seguimiento publico por ticket + DNI.
-- Pendiente: vista de atencion tecnica, generacion de PDF, estructura de carpetas Drive (NIVEL I/II/III), despliegue con `clasp` solo con confirmacion explicita y futura vista administrativa interna.
+- **v1.2.0 (Fase 1.2):** portal con intake, seguimiento publico, gestion TIC y generacion PDF F-TIC-12 desde HTML.
+- Pendiente: estructura de carpetas Drive (NIVEL I/II/III), nomenclatura documental final y automatizaciones complementarias ligadas a bitacora/inventario.

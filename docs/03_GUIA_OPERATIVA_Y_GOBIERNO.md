@@ -2,7 +2,7 @@
 
 ## Uso normal
 - **Solicitante:** abre el portal, elige `Registrar un reporte` o `Consultar estado`, busca su DNI si va a registrar, completa su movil, selecciona empresa y centro de costo, completa los detalles de la incidencia y envia. Recibe en pantalla el numero de ticket (`ID_REGISTRO`).
-- **TIC:** por ahora revisa y atiende los tickets directamente en la hoja `MC-F-TIC-12` (columna `ESTADO_REGISTRO`). La vista de atencion tecnica dedicada es una fase futura.
+- **TIC:** gestiona los tickets desde la vista administrativa del portal o, si hace falta soporte operativo, desde `MC-F-TIC-12`. Al cerrar un ticket, el sistema genera el PDF F-TIC-12 en Drive.
 
 ## Roles
 - **Solicitante:** cualquier colaborador presente en el padron (`TDEMSRL`/`GOYDELSAC`), o cualquier persona que complete los datos manualmente si no aparece en el padron.
@@ -14,10 +14,11 @@
 1. Confirmar `CONFIG.SPREADSHEETS.MAIN` y `CONFIG.SPREADSHEETS.PADRON_PERSONAL`.
 2. En el editor de Apps Script, configurar la Script Property `ANYDESK_CIPHER_SECRET`. Nunca commitear ese valor al repositorio.
 3. Ejecutar `configurarProyecto()` para asegurar la existencia de `LOG_EVENTOS` y `LOG_ERRORES`.
-4. Revisar el resultado de `validarEstructuraProyecto()` y confirmar `valido = true`.
+4. Revisar el resultado de `validarEstructuraProyecto()` y confirmar `valido = true`, incluyendo acceso a la carpeta Drive del PDF y evaluacion correcta de la plantilla HTML.
 
 ### Ciclo de vida de un ticket (Fase 1)
-`Abierto` (creado por el solicitante) -> fases futuras: `En Atencion` -> `Pendiente` / `Resuelto` -> `Cerrado`.
+`Abierto` (creado por el solicitante) -> `En Atencion` -> `Resuelto`.
+Cuando el ticket pasa a `Resuelto`, se congelan los datos de gestion y se genera el PDF F-TIC-12 desde la plantilla HTML institucional.
 
 ### Consulta publica
 1. El solicitante abre el modulo `Consultar estado`.
@@ -32,6 +33,7 @@
 ## Soporte
 - Revisar `LOG_ERRORES` ante incidencias del formulario.
 - Verificar que el DNI del solicitante este correctamente registrado en `TDEMSRL` o `GOYDELSAC` si el autocompletado falla repetidamente.
+- Si un ticket resuelto no muestra `LINK_PDF_REPORTE`, reintentar desde la accion administrativa de regeneracion PDF y revisar `LOG_ERRORES`.
 
 ## Reglas de mantenimiento
 - No editar directamente en el editor web de Apps Script salvo emergencia documentada.
@@ -50,7 +52,7 @@
 ## Riesgos operativos
 - Dependencia de que el padron unico (`TDEMSRL`/`GOYDELSAC`/`CECO`) se mantenga actualizado por su propietario.
 - Contrasenas de AnyDesk cifradas con un esquema reversible simple: aceptable para soporte temporal interno, no para secretos de mayor criticidad.
-- La vista administrativa del portal aun no reemplaza la gestion operativa en `MC-F-TIC-12`; esa parte sigue siendo manual hasta la fase siguiente.
+- `MC-F-TIC-12` sigue siendo la fuente operativa de respaldo; si falla la vista administrativa o la generacion documental, la trazabilidad principal continua en la hoja.
 
 ## Continuidad operativa
 - La hoja `MC-F-TIC-12`, el padron unico y el repositorio deben quedar bajo cuenta institucional.

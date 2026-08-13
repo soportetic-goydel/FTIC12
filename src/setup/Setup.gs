@@ -75,10 +75,19 @@ function validarEstructuraProyecto() {
     }
 
     try {
-      const template = DriveApp.getFileById(CONFIG.FORMATOS.F_TIC_12_TEMPLATE_SPREADSHEET);
-      registrar('Plantilla PDF F-TIC-12', !!template, template ? 'OK' : 'No se pudo acceder a la plantilla del formato.');
+      const template = HtmlService.createTemplateFromFile(CONFIG.FORMATOS.F_TIC_12_TEMPLATE_HTML);
+      template.data = FormatoService_construirVistaPdf_(FormatoService_registroDemoPdf_());
+      const contenido = template.evaluate().getContent();
+      registrar('Template PDF F-TIC-12 HTML', !!contenido, contenido ? 'OK' : 'No se pudo evaluar la plantilla HTML del formato.');
     } catch (errorDriveTemplate) {
-      registrar('Plantilla PDF F-TIC-12', false, 'Sin autorizacion de Drive o plantilla invalida: ' + Utils_resumirErrorSeguro_(errorDriveTemplate));
+      registrar('Template PDF F-TIC-12 HTML', false, 'Plantilla HTML invalida o no disponible: ' + Utils_resumirErrorSeguro_(errorDriveTemplate));
+    }
+
+    try {
+      const cuotaMail = MailApp.getRemainingDailyQuota();
+      registrar('Servicio de correo', cuotaMail >= 0, 'OK - cuota disponible: ' + cuotaMail);
+    } catch (errorMail) {
+      registrar('Servicio de correo', false, 'Sin autorizacion de correo o cuota no disponible: ' + Utils_resumirErrorSeguro_(errorMail));
     }
   } catch (error) {
     registrar('Excepcion', false, String(error));
@@ -89,18 +98,29 @@ function validarEstructuraProyecto() {
 
 function autorizarServiciosPdf() {
   const folder = DriveApp.getFolderById(CONFIG.DRIVE.FOLDER_RG_F_TIC_12);
-  const template = DriveApp.getFileById(CONFIG.FORMATOS.F_TIC_12_TEMPLATE_SPREADSHEET);
-  const temporal = template.makeCopy('AUTH_PDF_FTIC12_TMP_' + new Date().getTime(), folder);
-  const pdfTemporal = temporal.getAs(MimeType.PDF);
-  temporal.setTrashed(true);
+  const pdfTemporal = FormatoService_construirPdfBlobDesdeRegistro_(
+    FormatoService_registroDemoPdf_(),
+    'AUTH_PDF_FTIC12_TMP_' + new Date().getTime() + '.pdf'
+  );
+  const archivoTemporal = folder.createFile(pdfTemporal);
+  archivoTemporal.setTrashed(true);
   return {
     ok: true,
     folderId: folder.getId(),
     folderName: folder.getName(),
-    templateId: template.getId(),
-    templateName: template.getName(),
+    templateName: CONFIG.FORMATOS.F_TIC_12_TEMPLATE_HTML,
     pdfBytes: pdfTemporal.getBytes().length,
     message: 'Permisos completos del flujo PDF verificados correctamente para la generacion del F-TIC-12.'
+  };
+}
+
+function autorizarServiciosCorreo() {
+  const cuotaDisponible = MailApp.getRemainingDailyQuota();
+  return {
+    ok: true,
+    quotaRemaining: cuotaDisponible,
+    supportEmail: CONFIG.APP.SUPPORT_EMAIL || '',
+    message: 'Permisos del servicio de correo verificados correctamente.'
   };
 }
 

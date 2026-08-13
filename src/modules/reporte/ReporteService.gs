@@ -3,6 +3,7 @@ function ReporteService_obtenerCatalogos() {
     return ResponseService_ok_({
       tiposEquipo: TIPOS_EQUIPO,
       tiposProblema: TIPOS_PROBLEMA,
+      tiposProblemaPorActivo: TIPOS_PROBLEMA_POR_ACTIVO,
       prioridades: PRIORIDADES_USUARIO,
       empresas: EMPRESAS_GRUPO
     }, 'Catalogos obtenidos.');
@@ -19,6 +20,18 @@ function ReporteService_crearReporte(payload) {
       return ResponseService_error_('', validacion.errores.join(' '), RESPONSE_CODES.VALIDACION);
     }
 
+    const activoValidado = ActivosService_resolverActivoSeleccionadoPorDni_(datos.dni, datos.activoSeleccionadoId);
+    if (!activoValidado.ok) {
+      return ResponseService_error_('', activoValidado.message, activoValidado.code || RESPONSE_CODES.VALIDACION);
+    }
+
+    const validacionTipoProblema = ReporteService_validarTipoProblemaPorActivo_(datos.tipoProblema, activoValidado.result.assetKind);
+    if (!validacionTipoProblema.ok) {
+      return ResponseService_error_('', validacionTipoProblema.message, RESPONSE_CODES.VALIDACION);
+    }
+
+    datos.activoAfectado = activoValidado.result.activoAfectado || '';
+    datos.tipoEquipo = ReporteService_resolverTipoEquipoAutomatico_(datos.tipoEquipo, activoValidado.result.assetKind, datos.activoAfectado);
     const idRegistro = ReporteDataService_crearRegistro_(datos);
     LogService_evento_('CREAR_REPORTE', idRegistro, 'OK', 'Reporte creado por el solicitante.', { dni: datos.dni });
 
@@ -26,6 +39,16 @@ function ReporteService_crearReporte(payload) {
   } catch (error) {
     LogService_error_('ReporteService_crearReporte', error, { payload: payload });
     return ResponseService_error_(error, 'No se pudo registrar el reporte. Intenta nuevamente o consulta con soporte TIC.');
+  }
+}
+
+function ReporteService_listarActivosPorDni(payload) {
+  try {
+    payload = payload || {};
+    return ActivosService_listarCatalogoPorDni_(payload.dni);
+  } catch (error) {
+    LogService_error_('ReporteService_listarActivosPorDni', error, { payload: payload });
+    return ResponseService_error_(error, 'No se pudo obtener el catalogo de activos del colaborador.');
   }
 }
 
@@ -61,9 +84,10 @@ function ReporteService_obtenerSeguimientoPublico(payload) {
       nombreCompletoSolicitante: ReporteDataService_valorTexto_(registro.NOMBRE_COMPLETO_SOLICITANTE),
       cargoSolicitante: ReporteDataService_valorTexto_(registro.CARGO_SOLICITANTE),
       movilSolicitante: ReporteDataService_valorTexto_(registro.MOVIL_SOLICITANTE),
+      correoElectronicoSolicitante: ReporteDataService_valorTexto_(registro.CORREO_ELECTRONICO_SOLICITANTE),
       proyectoSede: ReporteDataService_valorTexto_(registro.PROYECTO_SEDE),
       centroCosto: ReporteDataService_valorTexto_(registro.CENTRO_DE_COSTO),
-      tipoEquipo: ReporteDataService_valorTexto_(registro.TIPO_EQUIPO),
+      tipoEquipo: ReporteDataService_resolverTipoEquipoRegistro_(registro),
       activoAfectado: ReporteDataService_valorTexto_(registro.ACTIVO_AFECTADO),
       tipoProblema: ReporteDataService_valorTexto_(registro.TIPO_PROBLEMA),
       prioridadUsuario: ReporteDataService_valorTexto_(registro.PRIORIDAD_USUARIO),
@@ -92,6 +116,9 @@ function ReporteService_adminListarTickets(payload) {
       tickets: data.tickets,
       resumen: data.resumen,
       estadosRegistro: ReporteDataService_estadosRegistroVisibles_(),
+      tiposEquipo: TIPOS_EQUIPO,
+      tecnicosTic: TECNICOS_TIC,
+      prioridades: PRIORIDADES_USUARIO,
       estadosFinales: ESTADOS_FINALES,
       accionesTomadas: ACCIONES_TOMADAS
     }, 'Tickets obtenidos correctamente.');
@@ -110,6 +137,8 @@ function ReporteService_adminActualizarTicket(payload) {
     const datos = {
       idRegistro: String(payload.idRegistro || '').trim().toUpperCase(),
       estadoRegistro: String(payload.estadoRegistro || '').trim(),
+      tipoEquipo: String(payload.tipoEquipo || '').trim(),
+      prioridad: String(payload.prioridad || '').trim(),
       tecnicoResponsable: String(payload.tecnicoResponsable || '').trim(),
       diagnosticoTic: String(payload.diagnosticoTic || '').trim(),
       accionTomada: String(payload.accionTomada || '').trim(),
@@ -120,8 +149,33 @@ function ReporteService_adminActualizarTicket(payload) {
       return ResponseService_error_('', 'Selecciona un ticket para actualizar.', RESPONSE_CODES.VALIDACION);
     }
 
+    const registroActual = ReporteDataService_obtenerRegistroPorId_(datos.idRegistro);
+    if (!registroActual) {
+      return ResponseService_error_('', 'No se encontro el ticket solicitado.', RESPONSE_CODES.NO_ENCONTRADO);
+    }
+
+    datos.tipoEquipo = ReporteService_resolverTipoEquipoAutomatico_(
+      datos.tipoEquipo,
+      '',
+      ReporteDataService_valorTexto_(registroActual.ACTIVO_AFECTADO)
+    );
+
+    if (datos.tipoEquipo && TIPOS_EQUIPO.indexOf(datos.tipoEquipo) === -1) {
+      return ResponseService_error_('', 'El tipo de equipo seleccionado no es valido.', RESPONSE_CODES.VALIDACION);
+    }
+
+    if (datos.tecnicoResponsable && TECNICOS_TIC.indexOf(datos.tecnicoResponsable) === -1) {
+      return ResponseService_error_('', 'El tecnico responsable seleccionado no es valido.', RESPONSE_CODES.VALIDACION);
+    }
+
+    if (datos.prioridad && PRIORIDADES_USUARIO.indexOf(datos.prioridad) === -1) {
+      return ResponseService_error_('', 'La prioridad seleccionada no es valida.', RESPONSE_CODES.VALIDACION);
+    }
+
     if (CONFIG.TRACKING.TERMINAL_STATUSES.indexOf(datos.estadoRegistro) !== -1) {
       const erroresCierre = [];
+      if (!datos.tipoEquipo) erroresCierre.push('tipo de equipo');
+      if (!datos.prioridad) erroresCierre.push('prioridad');
       if (!datos.tecnicoResponsable) erroresCierre.push('tecnico responsable');
       if (!datos.diagnosticoTic) erroresCierre.push('diagnostico TIC');
       if (!datos.accionTomada) erroresCierre.push('accion tomada');
@@ -134,13 +188,23 @@ function ReporteService_adminActualizarTicket(payload) {
     const actualizado = ReporteDataService_actualizarGestionAdmin_(datos);
     LogService_evento_('ADMIN_ACTUALIZAR_TICKET', datos.idRegistro, 'OK', 'Gestion TIC actualizada.', { estado: datos.estadoRegistro });
 
-    const mensaje = actualizado.pdf && actualizado.pdf.intentado && !actualizado.pdf.ok
-      ? 'Ticket actualizado, pero el PDF F-TIC-12 no se pudo generar. Puedes reintentarlo desde el panel TIC.'
-      : 'Ticket actualizado correctamente.';
+    let mensaje = 'Ticket actualizado correctamente.';
+    if (actualizado.pdf && actualizado.pdf.intentado && !actualizado.pdf.ok) {
+      mensaje = 'Ticket actualizado, pero el PDF F-TIC-12 no se pudo generar. Puedes reintentarlo desde el panel TIC.';
+    } else if (actualizado.notificacionCorreo && actualizado.notificacionCorreo.ok) {
+      mensaje = 'Ticket actualizado y correo resumen enviado correctamente al solicitante.';
+    } else if (actualizado.notificacionCorreo && actualizado.notificacionCorreo.status === 'OMITIDO_SIN_CORREO') {
+      mensaje = 'Ticket actualizado correctamente. No se envio el correo resumen porque el ticket no tiene un correo registrado.';
+    } else if (actualizado.notificacionCorreo && actualizado.notificacionCorreo.status === 'OMITIDO_CORREO_INVALIDO') {
+      mensaje = 'Ticket actualizado correctamente. No se envio el correo resumen porque el correo registrado no es valido.';
+    } else if (actualizado.notificacionCorreo && actualizado.notificacionCorreo.status === 'ERROR_ENVIO') {
+      mensaje = 'Ticket actualizado correctamente, pero no se pudo enviar el correo resumen al solicitante.';
+    }
 
     return ResponseService_ok_({
       ticket: ReporteService_mapearRegistroAdminDesdeObjeto_(actualizado.registro),
-      pdf: actualizado.pdf
+      pdf: actualizado.pdf,
+      notificacionCorreo: actualizado.notificacionCorreo
     }, mensaje);
   } catch (error) {
     LogService_error_('ReporteService_adminActualizarTicket', error, {});
@@ -193,4 +257,63 @@ function ReporteService_validarAccesoAdmin_(codigoAcceso) {
 
 function ReporteService_mapearRegistroAdminDesdeObjeto_(registro) {
   return ReporteDataService_mapearRegistroAdminDesdeRegistro_(registro);
+}
+
+function ReporteService_validarTipoProblemaPorActivo_(tipoProblema, assetKind) {
+  const valor = String(tipoProblema || '').trim();
+  const opciones = ReporteService_obtenerOpcionesTipoProblemaPorAssetKind_(assetKind);
+  if (!valor) {
+    return ResponseService_error_('', 'Selecciona el tipo de problema.', RESPONSE_CODES.VALIDACION);
+  }
+
+  const permitidoDirecto = opciones.some(function (opcion) {
+    return String(opcion.value || '').trim() === valor;
+  });
+  if (permitidoDirecto) {
+    return ResponseService_ok_({}, 'Tipo de problema valido para el activo.');
+  }
+
+  const categoriasBasePermitidas = {};
+  opciones.forEach(function (opcion) {
+    const categoria = String(opcion.category || '').trim();
+    if (categoria) categoriasBasePermitidas[categoria] = true;
+  });
+
+  if (categoriasBasePermitidas[valor]) {
+    return ResponseService_ok_({}, 'Tipo de problema legacy valido para el activo.');
+  }
+
+  return ResponseService_error_(
+    '',
+    'El tipo de problema no corresponde al activo seleccionado. Elige una categoria valida para ese equipo.',
+    RESPONSE_CODES.VALIDACION
+  );
+}
+
+function ReporteService_obtenerOpcionesTipoProblemaPorAssetKind_(assetKind) {
+  const clave = TIPOS_PROBLEMA_ASSET_KIND_MAP[String(assetKind || '').trim().toLowerCase()] || '';
+  return (TIPOS_PROBLEMA_POR_ACTIVO[clave] || []).slice();
+}
+
+function ReporteService_resolverTipoEquipoAutomatico_(tipoEquipoActual, assetKind, activoAfectado) {
+  const tipoEquipo = String(tipoEquipoActual || '').trim();
+  if (tipoEquipo) return tipoEquipo;
+
+  const kind = String(assetKind || '').trim().toLowerCase();
+  if (kind === 'smartphone') return 'Smartphone';
+  if (kind === 'printer') return 'Impresora';
+  if (kind === 'scanner') return 'Escaner';
+  if (kind === 'consulta') return 'Programas';
+  if (kind === 'otro') return 'Otro';
+  if (kind === 'pc') return 'PC-Portatil';
+
+  const activo = FormatoService_normalizarClave_(activoAfectado);
+  if (!activo) return '';
+  if (activo.indexOf('ESCANER') !== -1 || activo.indexOf('SCANER') !== -1) return 'Escaner';
+  if (activo.indexOf('IMPRESORA') !== -1) return 'Impresora';
+  if (activo.indexOf('SMARTPHONE') !== -1 || activo.indexOf('IMEI') !== -1 || activo.indexOf('MOVIL') !== -1) return 'Smartphone';
+  if (activo === 'CONSULTA') return 'Programas';
+  if (activo === 'OTROS' || activo === 'OTRO') return 'Otro';
+  if (activo.indexOf('PC') !== -1) return 'PC-Portatil';
+  return '';
 }

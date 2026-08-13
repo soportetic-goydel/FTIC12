@@ -28,6 +28,7 @@ function ReporteDataService_crearRegistro_(datos) {
 
     const ss = SheetsService_open_(CONFIG.SPREADSHEETS.MAIN);
     const sheet = SheetsService_getSheet_(ss, CONFIG.SHEETS.REGISTROS);
+    SheetsService_ensureHeaders_(sheet, CONFIG.HEADERS.REGISTROS);
     const ahora = Utils_now_();
     const anio = Utils_periodoAnio_(ahora);
     const idRegistro = ReporteDataService_generarIdRegistro_(sheet, anio);
@@ -45,6 +46,7 @@ function ReporteDataService_crearRegistro_(datos) {
       DNI_SOLICITANTE: datos.dni,
       CARGO_SOLICITANTE: datos.cargo,
       MOVIL_SOLICITANTE: datos.movil,
+      CORREO_ELECTRONICO_SOLICITANTE: Utils_normalizarCorreo_(datos.correoElectronico),
       PROYECTO_SEDE: datos.proyectoSede,
       CENTRO_DE_COSTO: datos.centroCosto,
       CECO_NUMERO: datos.cecoNumero || '',
@@ -72,7 +74,11 @@ function ReporteDataService_crearRegistro_(datos) {
       LINK_INVENTARIO_F_TIC_05: '',
       URL_EVIDENCIA_ADICIONAL: '',
       DIAS_DESDE_REPORTE: 0,
-      FLAG_DENTRO_SLA: 'SI'
+      FLAG_DENTRO_SLA: 'SI',
+      CORREO_DESTINO_RESUMEN: '',
+      FECHA_HORA_ENVIO_CORREO_RESUMEN: '',
+      ESTADO_ENVIO_CORREO_RESUMEN: '',
+      DETALLE_ENVIO_CORREO_RESUMEN: ''
     };
 
     const mapa = SheetsService_getHeaderMap_(sheet);
@@ -148,6 +154,7 @@ function ReporteDataService_actualizarGestionAdmin_(datos) {
 
     const ss = SheetsService_open_(CONFIG.SPREADSHEETS.MAIN);
     const sheet = SheetsService_getSheet_(ss, CONFIG.SHEETS.REGISTROS);
+    SheetsService_ensureHeaders_(sheet, CONFIG.HEADERS.REGISTROS);
     const idRegistro = String(datos.idRegistro || '').trim().toUpperCase();
     const fila = SheetsService_findRowByValue_(sheet, 'ID_REGISTRO', idRegistro);
     if (fila === -1) throw new Error('No se encontro el ticket solicitado.');
@@ -169,6 +176,9 @@ function ReporteDataService_actualizarGestionAdmin_(datos) {
     }
 
     ReporteDataService_setCellIfHeader_(sheet, mapa, fila, 'ESTADO_REGISTRO', estado);
+    ReporteDataService_setCellIfHeader_(sheet, mapa, fila, 'TIPO_EQUIPO', datos.tipoEquipo || '');
+    ReporteDataService_setCellIfHeader_(sheet, mapa, fila, 'PRIORIDAD_USUARIO', datos.prioridad || '');
+    ReporteDataService_setCellIfHeader_(sheet, mapa, fila, 'SLA_APLICADO', ReporteDataService_slaAplicado_(datos.prioridad));
     ReporteDataService_setCellIfHeader_(sheet, mapa, fila, 'TECNICO_RESPONSABLE', datos.tecnicoResponsable || '');
     ReporteDataService_setCellIfHeader_(sheet, mapa, fila, 'DIAGNOSTICO_TIC', datos.diagnosticoTic || '');
     ReporteDataService_setCellIfHeader_(sheet, mapa, fila, 'ACCION_TOMADA', datos.accionTomada || '');
@@ -190,14 +200,18 @@ function ReporteDataService_actualizarGestionAdmin_(datos) {
     SpreadsheetApp.flush();
 
     let resultadoPdf = ReporteDataService_resultadoPdfSinIntento_();
+    let resultadoCorreo = ReporteDataService_resultadoCorreoSinIntento_();
     if (ReporteDataService_esEstadoTerminal_(estado)) {
       const actualizadoParaPdf = ReporteDataService_obtenerRegistroPorId_(idRegistro);
       resultadoPdf = ReporteDataService_generarFormatoUnitarioSeguro_(sheet, mapa, fila, actualizadoParaPdf);
+      const actualizadoParaCorreo = ReporteDataService_obtenerRegistroPorId_(idRegistro);
+      resultadoCorreo = ReporteDataService_notificarCierreSeguro_(sheet, mapa, fila, actualizadoParaCorreo);
     }
 
     return {
       registro: ReporteDataService_obtenerRegistroPorId_(idRegistro),
-      pdf: resultadoPdf
+      pdf: resultadoPdf,
+      notificacionCorreo: resultadoCorreo
     };
   } finally {
     if (lockTomado) lock.releaseLock();
@@ -340,12 +354,69 @@ function ReporteDataService_generarFormatoUnitarioSeguro_(sheet, mapa, fila, reg
   }
 }
 
+function ReporteDataService_notificarCierreSeguro_(sheet, mapa, fila, registro) {
+  try {
+    const resultado = NotificacionService_enviarResumenAtencion_(registro);
+    ReporteDataService_registrarResultadoCorreoResumen_(sheet, mapa, fila, resultado);
+    SpreadsheetApp.flush();
+
+    if (resultado.ok) {
+      LogService_evento_('ENVIO_CORREO_RESUMEN', registro.ID_REGISTRO || '', 'OK', resultado.message, {
+        to: resultado.email || ''
+      });
+    } else if (resultado.skipped) {
+      LogService_evento_('ENVIO_CORREO_RESUMEN', registro.ID_REGISTRO || '', 'OMITIDO', resultado.message, {
+        to: resultado.email || ''
+      });
+    }
+
+    return resultado;
+  } catch (error) {
+    const resultadoError = {
+      ok: false,
+      intentado: true,
+      skipped: false,
+      status: 'ERROR_ENVIO',
+      email: Utils_normalizarCorreo_(registro && registro.CORREO_ELECTRONICO_SOLICITANTE),
+      sentAt: '',
+      message: 'No se pudo enviar el correo resumen al solicitante.',
+      technicalDetail: Utils_resumirErrorSeguro_(error)
+    };
+    ReporteDataService_registrarResultadoCorreoResumen_(sheet, mapa, fila, resultadoError);
+    SpreadsheetApp.flush();
+    LogService_error_('ReporteDataService_notificarCierreSeguro_', error, {
+      idRegistro: registro && registro.ID_REGISTRO || '',
+      correoDestino: resultadoError.email || ''
+    });
+    return resultadoError;
+  }
+}
+
 function ReporteDataService_resultadoPdfSinIntento_() {
   return {
     intentado: false,
     ok: false,
     message: ''
   };
+}
+
+function ReporteDataService_resultadoCorreoSinIntento_() {
+  return {
+    intentado: false,
+    ok: false,
+    skipped: false,
+    status: '',
+    email: '',
+    sentAt: '',
+    message: ''
+  };
+}
+
+function ReporteDataService_registrarResultadoCorreoResumen_(sheet, mapa, fila, resultado) {
+  ReporteDataService_setCellIfHeader_(sheet, mapa, fila, 'CORREO_DESTINO_RESUMEN', resultado && resultado.email || '');
+  ReporteDataService_setCellIfHeader_(sheet, mapa, fila, 'FECHA_HORA_ENVIO_CORREO_RESUMEN', resultado && resultado.sentAt || '');
+  ReporteDataService_setCellIfHeader_(sheet, mapa, fila, 'ESTADO_ENVIO_CORREO_RESUMEN', resultado && resultado.status || '');
+  ReporteDataService_setCellIfHeader_(sheet, mapa, fila, 'DETALLE_ENVIO_CORREO_RESUMEN', resultado && (resultado.technicalDetail || resultado.message) || '');
 }
 
 function ReporteDataService_mensajeErrorPdf_(error) {
@@ -372,6 +443,7 @@ function ReporteDataService_mapearRegistroAdminDesdeRegistro_(registro, numeroFi
   const metricas = ReporteDataService_calcularMetricasSlaDesdeRegistro_(registro);
   const estadoOriginal = v('ESTADO_REGISTRO');
   const mostrarContacto = ReporteDataService_puedeMostrarContactoAdmin_(estadoOriginal);
+  const tipoEquipoResuelto = ReporteDataService_resolverTipoEquipoRegistro_(registro);
 
   return {
     rowNumber: numeroFila || '',
@@ -385,9 +457,10 @@ function ReporteDataService_mapearRegistroAdminDesdeRegistro_(registro, numeroFi
     dniSolicitante: mostrarContacto ? v('DNI_SOLICITANTE') : '',
     cargoSolicitante: v('CARGO_SOLICITANTE'),
     movilSolicitante: mostrarContacto ? v('MOVIL_SOLICITANTE') : '',
+    correoElectronicoSolicitante: mostrarContacto ? v('CORREO_ELECTRONICO_SOLICITANTE') : '',
     proyectoSede: v('PROYECTO_SEDE'),
     centroCosto: v('CENTRO_DE_COSTO'),
-    tipoEquipo: v('TIPO_EQUIPO'),
+    tipoEquipo: tipoEquipoResuelto,
     activoAfectado: v('ACTIVO_AFECTADO'),
     tipoProblema: v('TIPO_PROBLEMA'),
     prioridadUsuario: v('PRIORIDAD_USUARIO'),
@@ -598,4 +671,41 @@ function ReporteDataService_slaHorasObjetivoDesdePrioridad_(prioridad) {
   if (prioridadNormalizada === 'Media') return 4;
   if (prioridadNormalizada === 'Baja') return 8;
   return 0;
+}
+
+function ReporteDataService_resolverTipoEquipoRegistro_(registro) {
+  return ReporteService_resolverTipoEquipoAutomatico_(
+    ReporteDataService_valorTexto_(registro && registro.TIPO_EQUIPO),
+    '',
+    ReporteDataService_valorTexto_(registro && registro.ACTIVO_AFECTADO)
+  );
+}
+
+function ReporteDataService_obtenerCorreoRecordadoPorDni_(dni) {
+  const dniNormalizado = Utils_normalizarDni_(dni);
+  if (dniNormalizado.length !== CONFIG.VALIDATION.DNI_LENGTH) return '';
+
+  try {
+    const ss = SheetsService_open_(CONFIG.SPREADSHEETS.MAIN);
+    const sheet = SheetsService_getSheet_(ss, CONFIG.SHEETS.REGISTROS);
+    const mapa = SheetsService_getHeaderMap_(sheet);
+    if (!('DNI_SOLICITANTE' in mapa) || !('CORREO_ELECTRONICO_SOLICITANTE' in mapa)) return '';
+
+    const ultimaFila = sheet.getLastRow();
+    if (ultimaFila < 2) return '';
+
+    const cantidadFilas = ultimaFila - 1;
+    const dnis = sheet.getRange(2, mapa.DNI_SOLICITANTE + 1, cantidadFilas, 1).getValues();
+    const correos = sheet.getRange(2, mapa.CORREO_ELECTRONICO_SOLICITANTE + 1, cantidadFilas, 1).getValues();
+
+    for (let i = cantidadFilas - 1; i >= 0; i--) {
+      if (Utils_normalizarDni_(dnis[i][0]) !== dniNormalizado) continue;
+      const correo = Utils_normalizarCorreo_(correos[i][0]);
+      if (Utils_esCorreoValido_(correo)) return correo;
+    }
+  } catch (error) {
+    LogService_error_('ReporteDataService_obtenerCorreoRecordadoPorDni_', error, { dni: dniNormalizado });
+  }
+
+  return '';
 }

@@ -37,32 +37,37 @@
   <label class="lbl" for="movil">Movil</label>
   <input class="inp" type="tel" id="movil" maxlength="<?= CONFIG.VALIDATION.MOVIL_LENGTH ?>" inputmode="numeric" pattern="[0-9]*" placeholder="Ej. 987654321">
 
+  <label class="lbl" for="correoElectronico">Correo electronico</label>
+  <input class="inp" type="email" id="correoElectronico" placeholder="Ej. nombre@empresa.com">
+
   <label class="lbl" for="proyectoSede">Area o proyecto / Sede</label>
   <input class="inp" type="text" id="proyectoSede" placeholder="Ej. TDEM LIMA LOGISTICA">
 
-  <label class="lbl" for="empresaDelGrupo">Empresa del grupo</label>
-  <select class="inp" id="empresaDelGrupo">
-    <option value="">Selecciona...</option>
-  </select>
+  <div hidden>
+    <label class="lbl" for="empresaDelGrupo">Empresa del grupo</label>
+    <select class="inp" id="empresaDelGrupo">
+      <option value="">Selecciona...</option>
+    </select>
 
-  <label class="lbl" for="centroCosto">Centro de Costo (CECO)</label>
-  <select class="inp" id="centroCosto" disabled>
-    <option value="">Selecciona primero la empresa...</option>
-  </select>
+    <label class="lbl" for="centroCosto">Centro de Costo (CECO)</label>
+    <select class="inp" id="centroCosto" disabled>
+      <option value="">Selecciona primero la empresa...</option>
+    </select>
 
-  <label class="lbl" for="cecoNumero">Numero CECO</label>
-  <input class="inp" type="text" id="cecoNumero" placeholder="Se completa automaticamente" readonly>
+    <label class="lbl" for="cecoNumero">Numero CECO</label>
+    <input class="inp" type="text" id="cecoNumero" placeholder="Se completa automaticamente" readonly>
 
-  <label class="lbl" for="tipoEquipo">Tipo de equipo</label>
-  <select class="inp" id="tipoEquipo">
-    <option value="">Selecciona...</option>
-  </select>
+    <label class="lbl" for="tipoEquipo">Tipo de equipo</label>
+    <select class="inp" id="tipoEquipo">
+      <option value="">Selecciona...</option>
+    </select>
+  </div>
 </div>
 
 <div class="seccion">
   <div class="seccion-titulo seccion-titulo-con-accion">
     <span class="seccion-titulo-texto"><span class="seccion-numero">2</span>Detalles de la incidencia</span>
-    <button type="button" class="btn-sla" id="btnVerSla">
+    <button type="button" class="btn-sla" id="btnVerSla" hidden>
       <span class="btn-sla-icon" aria-hidden="true">i</span>
       <span>
         <span class="btn-sla-main">Ver SLA</span>
@@ -71,18 +76,24 @@
     </button>
   </div>
 
-  <label class="lbl" for="activoAfectado">Activo afectado</label>
-  <input class="inp" type="text" id="activoAfectado" placeholder="N de serie, codigo de inventario o descripcion breve">
+  <label class="lbl" for="activoGrid">Activo afectado</label>
+  <input type="hidden" id="activoSeleccionadoId">
+  <input type="hidden" id="activoAfectado">
+  <div class="activo-grid" id="activoGrid" role="listbox" aria-label="Activos afectados disponibles"></div>
+  <div class="ayuda" id="activoAyuda">Ingresa tu DNI para cargar tus activos asignados.</div>
 
   <label class="lbl" for="tipoProblema">Tipo de problema</label>
-  <select class="inp" id="tipoProblema">
+  <select class="inp" id="tipoProblema" disabled>
     <option value="">Selecciona...</option>
   </select>
+  <div class="ayuda" id="tipoProblemaAyuda">Selecciona primero el activo afectado para ver las categorias aplicables.</div>
 
-  <label class="lbl" for="prioridad">Prioridad</label>
-  <select class="inp" id="prioridad">
-    <option value="">Selecciona...</option>
-  </select>
+  <div hidden>
+    <label class="lbl" for="prioridad">Prioridad</label>
+    <select class="inp" id="prioridad">
+      <option value="">Selecciona...</option>
+    </select>
+  </div>
 
   <label class="lbl" for="descripcion">Descripcion de la incidencia</label>
   <textarea class="inp" id="descripcion" rows="4" placeholder="Describe el problema con el mayor detalle posible"></textarea>

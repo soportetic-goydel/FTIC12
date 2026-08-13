@@ -30,6 +30,14 @@ function Utils_soloDigitos_(valor) {
   return Utils_normalizarTextoNumerico_(valor);
 }
 
+function Utils_normalizarCorreo_(valor) {
+  return String(valor || '').trim().toLowerCase();
+}
+
+function Utils_esCorreoValido_(valor) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(Utils_normalizarCorreo_(valor));
+}
+
 function Utils_now_() {
   return new Date();
 }

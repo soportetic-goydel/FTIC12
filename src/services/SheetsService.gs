@@ -70,3 +70,13 @@ function SheetsService_validateHeaders_(sheet, encabezadosRequeridos) {
   });
   return { valido: faltantes.length === 0, faltantes: faltantes };
 }
+
+function SheetsService_ensureHeaders_(sheet, encabezadosRequeridos) {
+  const validacion = SheetsService_validateHeaders_(sheet, encabezadosRequeridos);
+  if (!validacion.faltantes.length) return { agregado: false, faltantes: [] };
+
+  const columnaInicio = sheet.getLastColumn() + 1;
+  sheet.getRange(1, columnaInicio, 1, validacion.faltantes.length).setValues([validacion.faltantes]);
+  sheet.setFrozenRows(1);
+  return { agregado: true, faltantes: validacion.faltantes.slice() };
+}

@@ -10,6 +10,9 @@
   let adminTickets = [];
   let adminTicketSeleccionado = null;
   let adminEstadosRegistro = [];
+  let adminTiposEquipo = [];
+  let adminTecnicosTic = [];
+  let adminPrioridades = [];
   let adminEstadosFinales = [];
   let adminAccionesTomadas = [];
   let adminQuickFilter = 'TODOS';
@@ -529,7 +532,9 @@
         '<div class="admin-placeholder-title">Gestion TIC</div>' +
         '<div class="admin-management-grid">' +
         '<div><label class="lbl" for="adminEstadoRegistro">Estado del ticket</label><select class="inp" id="adminEstadoRegistro"></select></div>' +
-        '<div><label class="lbl" for="adminTecnicoResponsable">Tecnico responsable</label><input class="inp" type="text" id="adminTecnicoResponsable"></div>' +
+        '<div><label class="lbl" for="adminTipoEquipo">Tipo de equipo</label><input class="inp" type="text" id="adminTipoEquipo" readonly></div>' +
+        '<div><label class="lbl" for="adminPrioridad">Prioridad</label><select class="inp" id="adminPrioridad"></select></div>' +
+        '<div><label class="lbl" for="adminTecnicoResponsable">Tecnico responsable</label><select class="inp" id="adminTecnicoResponsable"></select></div>' +
         '<div><label class="lbl" for="adminAccionTomada">Accion tomada</label><select class="inp" id="adminAccionTomada"></select></div>' +
         '<div><label class="lbl" for="adminEstadoFinal">Estado final</label><select class="inp" id="adminEstadoFinal"></select></div>' +
         '</div>' +
@@ -573,15 +578,22 @@
     }
 
     const estadoSelect = document.getElementById('adminEstadoRegistro');
+    const tipoEquipoInput = document.getElementById('adminTipoEquipo');
+    const prioridadSelect = document.getElementById('adminPrioridad');
+    const tecnicoResponsableSelect = document.getElementById('adminTecnicoResponsable');
     const accionSelect = document.getElementById('adminAccionTomada');
     const estadoFinalSelect = document.getElementById('adminEstadoFinal');
     adminRenderOpciones(estadoSelect, estadosPermitidos, 'Selecciona estado...');
+    adminRenderOpciones(prioridadSelect, adminPrioridades, 'Selecciona prioridad...');
+    adminRenderOpciones(tecnicoResponsableSelect, adminTecnicosTic, 'Selecciona tecnico...');
     adminRenderOpciones(accionSelect, adminAccionesTomadas, 'Selecciona accion...');
     adminRenderOpciones(estadoFinalSelect, adminEstadosFinales, 'Selecciona estado final...');
     estadoSelect.value = ticket.estadoRegistro || '';
+    tipoEquipoInput.value = ticket.tipoEquipo || 'Pendiente de clasificacion automatica';
+    prioridadSelect.value = ticket.prioridadUsuario || '';
+    tecnicoResponsableSelect.value = ticket.tecnicoResponsable || '';
     accionSelect.value = ticket.accionTomada || '';
     estadoFinalSelect.value = ticket.estadoFinal || '';
-    document.getElementById('adminTecnicoResponsable').value = ticket.tecnicoResponsable || '';
     document.getElementById('adminDiagnosticoTic').value = ticket.diagnosticoTic || '';
     document.getElementById('btnAdminGuardarTicket').addEventListener('click', adminGuardarTicket);
   }
@@ -612,6 +624,9 @@
 
         adminTickets = res.result.tickets || [];
         adminEstadosRegistro = res.result.estadosRegistro || [];
+        adminTiposEquipo = res.result.tiposEquipo || [];
+        adminTecnicosTic = res.result.tecnicosTic || [];
+        adminPrioridades = res.result.prioridades || [];
         adminEstadosFinales = res.result.estadosFinales || [];
         adminAccionesTomadas = res.result.accionesTomadas || [];
         el.adminLoginPanel.hidden = true;
@@ -648,6 +663,8 @@
       codigoAcceso: adminAccessCode,
       idRegistro: adminTicketSeleccionado.idRegistro,
       estadoRegistro: document.getElementById('adminEstadoRegistro').value,
+      tipoEquipo: document.getElementById('adminTipoEquipo').value,
+      prioridad: document.getElementById('adminPrioridad').value,
       tecnicoResponsable: document.getElementById('adminTecnicoResponsable').value,
       diagnosticoTic: document.getElementById('adminDiagnosticoTic').value,
       accionTomada: document.getElementById('adminAccionTomada').value,
@@ -705,6 +722,8 @@
         codigoAcceso: adminAccessCode,
         idRegistro: adminTicketSeleccionado.idRegistro,
         estadoRegistro: 'En Atencion',
+        tipoEquipo: adminTicketSeleccionado.tipoEquipo || '',
+        prioridad: adminTicketSeleccionado.prioridadUsuario || '',
         tecnicoResponsable: '',
         diagnosticoTic: '',
         accionTomada: '',

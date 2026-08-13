@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="es">
+<? var m = data; ?>
+<head>
+  <meta charset="utf-8">
+  <style>
+    @page {
+      size: A4;
+      margin: 7mm;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: #000000;
+      font-family: Arial, sans-serif;
+      font-size: 10.5px;
+      background: #ffffff;
+    }
+
+    .page {
+      width: 196mm;
+      margin: 0 auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    td {
+      vertical-align: top;
+    }
+
+    .header-table td {
+      border: 1px solid #666666;
+      padding: 0;
+    }
+
+    .logo-cell {
+      width: 24%;
+      padding: 8px 10px;
+      vertical-align: middle;
+    }
+
+    .title-cell {
+      width: 50%;
+      text-align: center;
+      font-weight: 700;
+      padding: 6px 8px;
+      vertical-align: middle;
+    }
+
+    .title-format {
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+
+    .title-main {
+      font-size: 18px;
+      line-height: 1.15;
+    }
+
+    .meta-cell {
+      width: 26%;
+    }
+
+    .meta-table td {
+      border-bottom: 1px solid #666666;
+      padding: 4px 6px;
+      vertical-align: middle;
+      font-size: 10px;
+    }
+
+    .meta-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .meta-label {
+      width: 62%;
+      font-weight: 700;
+    }
+
+    .meta-value {
+      text-align: center;
+      font-weight: 700;
+    }
+
+    .ticket-meta {
+      margin-top: 4px;
+      text-align: right;
+      font-size: 10px;
+      font-weight: 700;
+      color: #334155;
+    }
+
+    .section {
+      margin-top: 8px;
+      border: 1px solid #000000;
+    }
+
+    .section-title {
+      background: #444444;
+      color: #ffffff;
+      font-weight: 700;
+      padding: 4px 6px;
+      border-bottom: 1px solid #000000;
+      font-size: 10.5px;
+    }
+
+    .section-body {
+      padding: 6px;
+    }
+
+    .field-table {
+      width: 100%;
+    }
+
+    .field-table td {
+      padding: 3px 2px;
+      vertical-align: middle;
+    }
+
+    .label {
+      width: 18%;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .label-wide {
+      width: 26%;
+    }
+
+    .value {
+      width: 32%;
+    }
+
+    .line-value {
+      min-height: 15px;
+      border-bottom: 1px dotted #000000;
+      padding: 1px 4px 2px;
+      white-space: normal;
+      word-break: break-word;
+    }
+
+    .line-value.single-line {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .option-block {
+      margin-top: 6px;
+    }
+
+    .option-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-top: 6px;
+    }
+
+    .option-row.compact {
+      gap: 10px;
+    }
+
+    .option-title {
+      width: 118px;
+      font-weight: 700;
+      padding-top: 2px;
+      flex: 0 0 118px;
+    }
+
+    .option-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 14px;
+      flex: 1 1 auto;
+    }
+
+    .option-item {
+      display: inline-flex;
+      align-items: center;
+      min-width: 110px;
+      line-height: 1.2;
+    }
+
+    .option-item.short {
+      min-width: 80px;
+    }
+
+    .checkbox {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 1px solid #666666;
+      margin-right: 6px;
+      text-align: center;
+      line-height: 17px;
+      font-size: 12px;
+      font-weight: 700;
+      flex: 0 0 18px;
+    }
+
+    .option-text {
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    .option-other {
+      flex: 1 1 100%;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .option-other .line-value {
+      flex: 1 1 auto;
+      min-height: 16px;
+    }
+
+    .anydesk {
+      background: #f4cccc;
+      border: 1px solid #d28f8f;
+      padding: 6px 8px;
+      margin-top: 10px;
+    }
+
+    .anydesk-table td {
+      padding: 4px 2px;
+      vertical-align: middle;
+    }
+
+    .anydesk-label {
+      font-weight: 700;
+      width: 18%;
+      white-space: nowrap;
+    }
+
+    .anydesk-mid-label {
+      width: 6%;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .diagnostico-label {
+      font-weight: 700;
+      margin-top: 10px;
+    }
+
+    .diagnostico-box {
+      min-height: 86px;
+      padding: 6px 6px 10px;
+      border-bottom: 1px dotted #000000;
+      white-space: pre-line;
+      overflow-wrap: anywhere;
+      line-height: 1.35;
+    }
+
+    .footer-box {
+      margin-top: 8px;
+      border: 1px solid #666666;
+      background: #e9ecef;
+      padding: 0;
+    }
+
+    .footer-table td {
+      padding: 7px 6px;
+      vertical-align: middle;
+      font-size: 10px;
+    }
+
+    .footer-label {
+      font-weight: 700;
+      width: 18%;
+      white-space: nowrap;
+    }
+
+    .footer-value {
+      width: 32%;
+    }
+
+    .footer-note {
+      margin-top: 6px;
+      border-top: 1px dotted #666666;
+      color: #666666;
+      font-size: 10px;
+      font-style: italic;
+      text-align: center;
+      padding-top: 6px;
+    }
+
+    .logo-svg {
+      display: block;
+      width: 100%;
+      height: 46px;
+    }
+
+    .resolution-table td {
+      padding: 3px 2px;
+      vertical-align: middle;
+      font-size: 10.5px;
+    }
+
+    .resolution-label {
+      width: 18%;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .resolution-check {
+      width: 22px;
+      text-align: center;
+    }
+
+    .resolution-text {
+      width: 17%;
+      white-space: nowrap;
+    }
+
+    .resolution-spacer td {
+      height: 8px;
+      padding: 0;
+      border: 0;
+    }
+
+    .resolution-diag-label {
+      width: 18%;
+      font-weight: 700;
+      vertical-align: top;
+      padding-top: 2px;
+    }
+
+    .resolution-diag-box {
+      min-height: 170px;
+      border-bottom: 1px dotted #000000;
+      white-space: pre-line;
+      overflow-wrap: anywhere;
+      line-height: 1.35;
+      padding: 2px 4px 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <table class="header-table">
+      <tr>
+        <td class="logo-cell">
+          <svg class="logo-svg" viewBox="0 0 240 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <g fill="#2f7bc0">
+              <path d="M8 18L24 8L20 28L36 20L26 54L8 18Z"/>
+              <path d="M30 10L44 2L40 20L54 14L44 46L30 10Z" opacity="0.8"/>
+            </g>
+            <text x="62" y="40" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#2f7bc0">GOYDEL</text>
+          </svg>
+        </td>
+        <td class="title-cell">
+          <div class="title-format">FORMATO</div>
+          <div class="title-main">REPORTE DE INCIDENCIAS Y FALLAS TECNICAS</div>
+        </td>
+        <td class="meta-cell">
+          <table class="meta-table">
+            <tr>
+              <td class="meta-label">CODIGO:</td>
+              <td class="meta-value"><?= m.codigoFormato ?></td>
+            </tr>
+            <tr>
+              <td class="meta-label">VERSION:</td>
+              <td class="meta-value"><?= m.versionFormato ?></td>
+            </tr>
+            <tr>
+              <td class="meta-label">FECHA DE APROBACION:</td>
+              <td class="meta-value"><?= m.fechaAprobacion ?></td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <div class="ticket-meta">Ticket: <?= m.ticketId ?></div>
+
+    <div class="section">
+      <div class="section-title">1. DATOS DEL SOLICITANTE</div>
+      <div class="section-body">
+        <table class="field-table">
+          <tr>
+            <td class="label">Nombre completo:</td>
+            <td class="value"><div class="line-value single-line"><?= m.nombreCompletoSolicitante ?></div></td>
+            <td class="label">DNI:</td>
+            <td class="value"><div class="line-value single-line"><?= m.dniSolicitante ?></div></td>
+          </tr>
+          <tr>
+            <td class="label">Cargo:</td>
+            <td class="value"><div class="line-value single-line"><?= m.cargoSolicitante ?></div></td>
+            <td class="label">Movil:</td>
+            <td class="value"><div class="line-value single-line"><?= m.movilSolicitante ?></div></td>
+          </tr>
+          <tr>
+            <td class="label">Area o proyecto:</td>
+            <td class="value"><div class="line-value single-line"><?= m.proyectoSede ?></div></td>
+            <td class="label label-wide">Centro de Costo (CECO):</td>
+            <td class="value"><div class="line-value single-line"><?= m.centroCosto ?></div></td>
+          </tr>
+          <tr>
+            <td class="label">Fecha y hora del reporte:</td>
+            <td class="value"><div class="line-value single-line"><?= m.fechaHoraReporte ?></div></td>
+            <td class="label">Correo electronico:</td>
+            <td class="value"><div class="line-value single-line"><?= m.correoElectronicoSolicitante ?></div></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">2. DETALLES DE LA INCIDENCIA (REPORTADO)</div>
+      <div class="section-body">
+        <table class="field-table">
+          <tr>
+            <td class="label">Serie o IMEI del Equipo:</td>
+            <td colspan="3"><div class="line-value single-line"><?= m.activoAfectado ?></div></td>
+          </tr>
+        </table>
+
+        <div class="option-block">
+          <div class="option-row">
+            <div class="option-title">Tipo de Equipo:</div>
+            <div class="option-items">
+              <div class="option-item"><span class="checkbox"><?= m.tipoEquipo.pcPortatil ? 'X' : '' ?></span><span class="option-text">PC-Portatil</span></div>
+              <div class="option-item"><span class="checkbox"><?= m.tipoEquipo.pcEscritorio ? 'X' : '' ?></span><span class="option-text">PC-Escritorio</span></div>
+              <div class="option-item short"><span class="checkbox"><?= m.tipoEquipo.smartphone ? 'X' : '' ?></span><span class="option-text">Smartphone</span></div>
+              <div class="option-item short"><span class="checkbox"><?= m.tipoEquipo.impresora ? 'X' : '' ?></span><span class="option-text">Impresora</span></div>
+              <div class="option-item short"><span class="checkbox"><?= m.tipoEquipo.escaner ? 'X' : '' ?></span><span class="option-text">Escaner</span></div>
+              <div class="option-item short"><span class="checkbox"><?= m.tipoEquipo.programas ? 'X' : '' ?></span><span class="option-text">Programas</span></div>
+              <div class="option-other"><span class="checkbox"><?= m.tipoEquipo.otro ? 'X' : '' ?></span><span class="option-text">Otros:</span><div class="line-value single-line"><?= m.tipoEquipoOtro ?></div></div>
+            </div>
+          </div>
+
+          <div class="option-row compact">
+            <div class="option-title">Tipo de Problema:</div>
+            <div class="option-items">
+              <div class="option-item short"><span class="checkbox"><?= m.tipoProblema.hardware ? 'X' : '' ?></span><span class="option-text">Hardware</span></div>
+              <div class="option-item short"><span class="checkbox"><?= m.tipoProblema.software ? 'X' : '' ?></span><span class="option-text">Software</span></div>
+              <div class="option-item short"><span class="checkbox"><?= m.tipoProblema.red ? 'X' : '' ?></span><span class="option-text">Red</span></div>
+            </div>
+          </div>
+
+          <div class="option-row compact">
+            <div class="option-title">Prioridad:</div>
+            <div class="option-items">
+              <div class="option-item short"><span class="checkbox"><?= m.prioridad.baja ? 'X' : '' ?></span><span class="option-text">Baja</span></div>
+              <div class="option-item short"><span class="checkbox"><?= m.prioridad.media ? 'X' : '' ?></span><span class="option-text">Media</span></div>
+              <div class="option-item short"><span class="checkbox"><?= m.prioridad.alta ? 'X' : '' ?></span><span class="option-text">Alta</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="anydesk">
+      <table class="anydesk-table">
+        <tr>
+          <td class="anydesk-label">Acceso Remoto AnyDesk:</td>
+          <td class="anydesk-mid-label">ID:</td>
+          <td><div class="line-value single-line"><?= m.anydeskId ?></div></td>
+          <td class="anydesk-mid-label">Password (Si aplica):</td>
+          <td><div class="line-value single-line"><?= m.anydeskPasswordTexto ?></div></td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-title">3. EVALUACION Y RESOLUCION (USO INTERNO TIC)</div>
+      <div class="section-body">
+        <table class="resolution-table">
+          <tr>
+            <td class="resolution-label">SLA Aplicado:</td>
+            <td class="resolution-check"><span class="checkbox"><?= m.sla.p1 ? 'X' : '' ?></span></td>
+            <td class="resolution-text">P1 - CRITICO</td>
+            <td class="resolution-check"><span class="checkbox"><?= m.sla.p2 ? 'X' : '' ?></span></td>
+            <td class="resolution-text">P2 - ALTO</td>
+            <td class="resolution-check"><span class="checkbox"><?= m.sla.p3 ? 'X' : '' ?></span></td>
+            <td class="resolution-text">P3 - ESTANDAR</td>
+            <td class="resolution-check"><span class="checkbox"><?= m.sla.p4 ? 'X' : '' ?></span></td>
+            <td class="resolution-text">P4 - CONSULTA</td>
+          </tr>
+          <tr class="resolution-spacer">
+            <td colspan="9"></td>
+          </tr>
+          <tr>
+            <td class="resolution-diag-label">Diagnostico TIC:</td>
+            <td colspan="8"></td>
+          </tr>
+          <tr>
+            <td></td>
+            <td colspan="8">
+              <div class="resolution-diag-box" style="font-size: <?= m.diagnosticoFontSize ?>pt;"><?= m.diagnosticoTic ?></div>
+            </td>
+          </tr>
+          <tr class="resolution-spacer">
+            <td colspan="9"></td>
+          </tr>
+          <tr>
+            <td class="resolution-label">Accion Tomada:</td>
+            <td class="resolution-check"><span class="checkbox"><?= m.accionTomada.soporteRemoto ? 'X' : '' ?></span></td>
+            <td class="resolution-text">Soporte Remoto</td>
+            <td class="resolution-check"><span class="checkbox"><?= m.accionTomada.soportePresencial ? 'X' : '' ?></span></td>
+            <td class="resolution-text">Soporte Presencial</td>
+            <td class="resolution-check"><span class="checkbox"><?= m.accionTomada.taller ? 'X' : '' ?></span></td>
+            <td class="resolution-text">Taller</td>
+            <td class="resolution-check"><span class="checkbox"><?= m.accionTomada.garantia ? 'X' : '' ?></span></td>
+            <td class="resolution-text">Garantia</td>
+          </tr>
+          <tr>
+            <td class="resolution-label">Estado Final:</td>
+            <td class="resolution-check"><span class="checkbox"><?= m.estadoFinal.operativo ? 'X' : '' ?></span></td>
+            <td class="resolution-text">OPERATIVO</td>
+            <td class="resolution-check"><span class="checkbox"><?= m.estadoFinal.pendiente ? 'X' : '' ?></span></td>
+            <td class="resolution-text">PENDIENTE</td>
+            <td class="resolution-check"><span class="checkbox"><?= m.estadoFinal.reposicion ? 'X' : '' ?></span></td>
+            <td class="resolution-text">REPOSICION</td>
+            <td colspan="2"></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="footer-box">
+      <table class="footer-table">
+        <tr>
+          <td class="footer-label">Tecnico Responsable:</td>
+          <td class="footer-value"><div class="line-value single-line"><?= m.tecnicoResponsable ?></div></td>
+          <td class="footer-label">Fecha y hora de cierre:</td>
+          <td class="footer-value"><div class="line-value single-line"><?= m.fechaHoraCierre ?></div></td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="footer-note">Este documento es un registro administrativo generado a partir del reporte web. No requiere firma fisica del usuario.</div>
+  </div>
+</body>
+</html>
