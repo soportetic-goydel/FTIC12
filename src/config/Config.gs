@@ -12,7 +12,15 @@ const CONFIG = {
 
   VALIDATION: {
     DNI_LENGTH: 8,
-    MOVIL_LENGTH: 9
+    MOVIL_LENGTH: 9,
+    CORREO_DOMINIOS_PERMITIDOS: [
+      '@tdemperu.com',
+      '@tdemperu.pe',
+      '@rafetec.com',
+      '@goydelperu.com',
+      '@metrinperu.com'
+    ],
+    CORREO_SIN_CORPORATIVO: 'Sin correo'
   },
 
   TRACKING: {

@@ -6,7 +6,9 @@ function ActivosService_listarCatalogoPorDni_(dni) {
     const persona = personaResp.result || {};
     const catalogo = ActivosService_resolverCatalogoParaPersona_(persona);
     return ResponseService_ok_({
-      activos: catalogo.activos.map(ActivosService_mapearActivoPublico_)
+      activos: catalogo.activos.map(ActivosService_mapearActivoPublico_),
+      activosPersonales: catalogo.activosPersonales.map(ActivosService_mapearActivoPublico_),
+      activosCeco: catalogo.activosCeco.map(ActivosService_mapearActivoPublico_)
     }, catalogo.message);
   } catch (error) {
     LogService_error_('ActivosService_listarCatalogoPorDni_', error, { dni: dni });
@@ -52,6 +54,8 @@ function ActivosService_resolverCatalogoParaPersona_(persona) {
   const virtuales = ActivosService_obtenerOpcionesVirtuales_();
   return {
     activos: activosFisicos.activos.concat(virtuales),
+    activosPersonales: activosFisicos.activosPersonales,
+    activosCeco: activosFisicos.activosCeco,
     message: activosFisicos.message
   };
 }
@@ -62,16 +66,33 @@ function ActivosService_resolverActivosFisicosParaPersona_(persona) {
   if (!hojasEmpresa) {
     return {
       activos: [],
+      activosPersonales: [],
+      activosCeco: [],
       message: 'No se encontro una base de activos configurada para este colaborador. Puedes registrar Consulta u Otros.'
     };
   }
 
   const registros = ActivosService_listarRegistrosFisicosEmpresa_(hojasEmpresa);
+  const personales = ActivosService_resolverActivosPersonalesParaPersona_(registros, persona, empresa);
+  const compartidosCeco = ActivosService_resolverActivosCompartidosCeco_(registros, persona);
+  const personalesEnriquecidos = ActivosService_etiquetarActivosPorOrigen_(personales.activos, 'personal');
+  const compartidosEnriquecidos = ActivosService_etiquetarActivosPorOrigen_(compartidosCeco.activos, 'ceco');
+  const unificados = ActivosService_unificarActivosFisicos_(personalesEnriquecidos, compartidosEnriquecidos);
+
+  return {
+    activos: ActivosService_ordenarActivos_(unificados),
+    activosPersonales: ActivosService_ordenarActivos_(personalesEnriquecidos),
+    activosCeco: ActivosService_ordenarActivos_(compartidosEnriquecidos),
+    message: ActivosService_resolverMensajeCatalogo_(personalesEnriquecidos, compartidosEnriquecidos, personales.message)
+  };
+}
+
+function ActivosService_resolverActivosPersonalesParaPersona_(registros, persona, empresa) {
   const coincidenciasNombre = ActivosService_filtrarCoincidenciasPorNombre_(registros, persona);
   if (!coincidenciasNombre.length) {
     return {
       activos: [],
-      message: 'No se encontraron activos asignados para este DNI. Puedes registrar Consulta u Otros.'
+      message: 'No se encontraron activos personales asignados para este DNI.'
     };
   }
 
@@ -95,8 +116,8 @@ function ActivosService_resolverActivosFisicosParaPersona_(persona) {
     }
 
     return {
-      activos: ActivosService_ordenarActivos_(ActivosService_mapearActivosDesdeRegistros_(extendidas)),
-      message: 'Selecciona el activo afectado asignado a tu usuario o registra Consulta u Otros.'
+      activos: ActivosService_mapearActivosDesdeRegistros_(extendidas),
+      message: 'Selecciona el activo afectado asignado a tu usuario.'
     };
   }
 
@@ -106,8 +127,8 @@ function ActivosService_resolverActivosFisicosParaPersona_(persona) {
 
   if (coincidenciasExactas.length && !ActivosService_esCoincidenciaAmbigua_(coincidenciasExactas)) {
     return {
-      activos: ActivosService_ordenarActivos_(ActivosService_mapearActivosDesdeRegistros_(coincidenciasExactas)),
-      message: 'Selecciona el activo afectado asignado a tu usuario o registra Consulta u Otros.'
+      activos: ActivosService_mapearActivosDesdeRegistros_(coincidenciasExactas),
+      message: 'Selecciona el activo afectado asignado a tu usuario.'
     };
   }
 
@@ -120,8 +141,87 @@ function ActivosService_resolverActivosFisicosParaPersona_(persona) {
 
   return {
     activos: [],
-    message: 'No se pudo identificar de forma confiable tus activos asignados. Puedes registrar Consulta u Otros.'
+    message: 'No se pudo identificar de forma confiable tus activos personales asignados.'
   };
+}
+
+function ActivosService_resolverActivosCompartidosCeco_(registros, persona) {
+  const cecoNumeroPersona = Utils_soloDigitos_(persona && persona.cecoNumero || '');
+  const cecoNombrePersona = ActivosService_normalizarTexto_(persona && persona.cecoNombre || '');
+
+  if (!cecoNumeroPersona && !cecoNombrePersona) {
+    return { activos: [] };
+  }
+
+  const coincidencias = registros.filter(function (registro) {
+    const assetKind = String(registro.assetKind || '').toLowerCase();
+    if (assetKind !== 'printer' && assetKind !== 'scanner') return false;
+    return ActivosService_coincideCeco_(ActivosService_normalizarTexto_(registro.ownerCeco || ''), cecoNumeroPersona, cecoNombrePersona);
+  });
+
+  return {
+    activos: ActivosService_mapearActivosDesdeRegistros_(coincidencias)
+  };
+}
+
+function ActivosService_etiquetarActivosPorOrigen_(activos, origen) {
+  const sourceType = origen === 'ceco' ? 'ceco' : 'personal';
+  const sourceLabel = sourceType === 'ceco'
+    ? 'Activo compartido del CECO'
+    : 'Activo personal';
+
+  return (activos || []).map(function (activo) {
+    const clon = Object.assign({}, activo);
+    clon.sourceType = sourceType;
+    clon.sourceLabel = sourceLabel;
+    return clon;
+  });
+}
+
+function ActivosService_unificarActivosFisicos_(activosPersonales, activosCeco) {
+  const mapa = {};
+
+  (activosPersonales || []).forEach(function (activo) {
+    if (!activo.id) return;
+    mapa[activo.id] = Object.assign({}, activo);
+  });
+
+  (activosCeco || []).forEach(function (activo) {
+    if (!activo.id) return;
+    if (!mapa[activo.id]) {
+      mapa[activo.id] = Object.assign({}, activo);
+      return;
+    }
+
+    const existente = mapa[activo.id];
+    if (existente.sourceType === 'personal') {
+      existente.sourceType = 'personal_ceco';
+      existente.sourceLabel = 'Activo personal y compartido del CECO';
+    }
+  });
+
+  return Object.keys(mapa).map(function (id) {
+    return mapa[id];
+  });
+}
+
+function ActivosService_resolverMensajeCatalogo_(activosPersonales, activosCeco, mensajePersonales) {
+  const tienePersonales = !!(activosPersonales && activosPersonales.length);
+  const tieneCeco = !!(activosCeco && activosCeco.length);
+
+  if (tienePersonales && tieneCeco) {
+    return 'Selecciona el activo afectado entre tus activos personales y los compartidos de tu CECO, o registra Consulta u Otros.';
+  }
+
+  if (tienePersonales) {
+    return 'Selecciona el activo afectado asignado a tu usuario, o registra Consulta u Otros.';
+  }
+
+  if (tieneCeco) {
+    return 'Selecciona el activo compartido de tu CECO, o registra Consulta u Otros.';
+  }
+
+  return mensajePersonales || 'No se encontraron activos asignados para este DNI. Puedes registrar Consulta u Otros.';
 }
 
 function ActivosService_listarRegistrosFisicosEmpresa_(hojasEmpresa) {
@@ -335,6 +435,8 @@ function ActivosService_mapearActivoPublico_(activo) {
     iconKey: activo.iconKey,
     assetKind: activo.assetKind,
     secondaryText: activo.secondaryText || '',
+    sourceType: activo.sourceType || '',
+    sourceLabel: activo.sourceLabel || '',
     isVirtual: !!activo.isVirtual,
     canonicalLabel: activo.canonicalLabel || activo.label || ''
   };

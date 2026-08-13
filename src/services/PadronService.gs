@@ -1,7 +1,7 @@
 function PadronService_buscarPorDni(dni) {
   try {
     const dniNormalizado = Utils_normalizarDni_(dni);
-    const correoRecordado = ReporteDataService_obtenerCorreoRecordadoPorDni_(dniNormalizado);
+    const correoRecordado = PadronService_normalizarCorreoCorporativo_(ReporteDataService_obtenerCorreoRecordadoPorDni_(dniNormalizado));
     if (dniNormalizado.length !== 8) {
       return ResponseService_error_('', 'El DNI debe tener 8 digitos.', RESPONSE_CODES.VALIDACION);
     }
@@ -9,7 +9,7 @@ function PadronService_buscarPorDni(dni) {
     const ss = SheetsService_open_(CONFIG.SPREADSHEETS.PADRON_PERSONAL);
     const encontradoCentral = PadronService_buscarEnPersonalCentral_(ss, dniNormalizado);
     if (encontradoCentral) {
-      const correoResuelto = correoRecordado || encontradoCentral.correoElectronico || '';
+      const correoResuelto = correoRecordado || PadronService_normalizarCorreoCorporativo_(encontradoCentral.correoElectronico) || '';
       return ResponseService_ok_({
         dni: dniNormalizado,
         nombreCompleto: encontradoCentral.nombreCompleto,
@@ -28,7 +28,7 @@ function PadronService_buscarPorDni(dni) {
     for (const codigoEmpresa in empresas) {
       const encontrado = PadronService_buscarEnEmpresa_(ss, empresas[codigoEmpresa], dniNormalizado);
       if (encontrado) {
-        const correoResuelto = correoRecordado || encontrado.correoElectronico || '';
+      const correoResuelto = correoRecordado || PadronService_normalizarCorreoCorporativo_(encontrado.correoElectronico) || '';
         return ResponseService_ok_({
           dni: dniNormalizado,
           nombreCompleto: encontrado.nombreCompleto,
@@ -67,7 +67,7 @@ function PadronService_buscarEnPersonalCentral_(ss, dniNormalizado) {
     nombreCompleto: valores[mapa[headers.NOMBRE]] || '',
     cargo: valores[mapa[headers.CARGO]] || '',
     movil: valores[mapa[headers.MOVIL]] || '',
-    correoElectronico: Utils_normalizarCorreo_(valores[mapa[headers.EMAIL_CORPORATIVO]] || valores[mapa[headers.EMAIL_PERSONAL]] || ''),
+    correoElectronico: PadronService_normalizarCorreoCorporativo_(valores[mapa[headers.EMAIL_CORPORATIVO]] || valores[mapa[headers.EMAIL_PERSONAL]] || ''),
     proyecto: valores[mapa[headers.AREA_PROYECTO]] || '',
     empresa: PadronService_codigoEmpresaDesdeRazonSocial_(valores[mapa[headers.RAZON_SOCIAL]]),
     cecoNumero: valores[mapa[headers.CECO_NUMERO]] || '',
@@ -177,4 +177,9 @@ function PadronService_codigoEmpresaDesdeRazonSocial_(razonSocial) {
   }
 
   return empresaNormalizada;
+}
+
+function PadronService_normalizarCorreoCorporativo_(valor) {
+  const correo = Utils_normalizarCorreo_(valor);
+  return Utils_esCorreoCorporativoPermitido_(correo) ? correo : '';
 }

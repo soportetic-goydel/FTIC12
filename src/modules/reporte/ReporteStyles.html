@@ -64,15 +64,112 @@
   }
 
   .ayuda { font-size: 11px; color: var(--c-muted); margin-top: 4px; min-height: 14px; }
+  .toggle-field {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 10px 0 4px;
+    padding: 10px 12px;
+    border: 1px solid var(--c-borde);
+    border-radius: 12px;
+    background: #f8fafc;
+    cursor: pointer;
+  }
+  .toggle-field input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .toggle-ui {
+    position: relative;
+    flex: none;
+    width: 42px;
+    height: 24px;
+    border-radius: 999px;
+    background: #cbd5e1;
+    transition: background-color 0.18s ease;
+    margin-top: 1px;
+  }
+  .toggle-knob {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18);
+    transition: transform 0.18s ease;
+  }
+  .toggle-copy {
+    display: block;
+    min-width: 0;
+  }
+  .toggle-title {
+    display: block;
+    color: var(--c-texto);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+  .toggle-help {
+    display: block;
+    margin-top: 3px;
+    color: var(--c-muted);
+    font-size: 11px;
+    line-height: 1.45;
+  }
+  .toggle-field input:checked + .toggle-ui {
+    background: var(--c-secundario);
+  }
+  .toggle-field input:checked + .toggle-ui .toggle-knob {
+    transform: translateX(18px);
+  }
+  .inp.is-disabled {
+    background: #eef2f7;
+    color: #64748b;
+    cursor: not-allowed;
+  }
 
   .activo-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+    display: block;
     margin-top: 8px;
   }
   .activo-grid:empty {
     display: none;
+  }
+  .activo-section {
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid var(--c-borde);
+    border-radius: 16px;
+    background: linear-gradient(180deg, #fbfdff 0%, #f7fafc 100%);
+  }
+  .activo-section:first-child {
+    margin-top: 0;
+  }
+  .activo-section-head {
+    margin-bottom: 10px;
+  }
+  .activo-section-title {
+    display: block;
+    color: var(--c-texto);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  .activo-section-desc {
+    display: block;
+    margin-top: 3px;
+    color: var(--c-muted);
+    font-size: 11px;
+    line-height: 1.45;
+  }
+  .activo-grid-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
   }
   .activo-card {
     display: flex;
@@ -353,7 +450,7 @@
   }
 
   @media (max-width: 640px) {
-    .activo-grid {
+    .activo-grid-list {
       grid-template-columns: 1fr;
     }
 

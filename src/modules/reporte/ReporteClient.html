@@ -3,6 +3,9 @@
   const dniLength = Number(<?= CONFIG.VALIDATION.DNI_LENGTH ?>);
   const movilLength = Number(<?= CONFIG.VALIDATION.MOVIL_LENGTH ?>);
   const dniAutoBusquedaDelayMs = 350;
+  const allowedEmailDomains = <?!= JSON.stringify(CONFIG.VALIDATION.CORREO_DOMINIOS_PERMITIDOS || []) ?>;
+  const sinCorreoText = <?!= JSON.stringify(CONFIG.VALIDATION.CORREO_SIN_CORPORATIVO || 'Sin correo') ?>;
+  const allowedEmailDomainsLabel = allowedEmailDomains.join(', ');
 
   const el = {
     dni: document.getElementById('dni'),
@@ -12,6 +15,7 @@
     cargo: document.getElementById('cargo'),
     movil: document.getElementById('movil'),
     correoElectronico: document.getElementById('correoElectronico'),
+    sinCorreoCorporativo: document.getElementById('sinCorreoCorporativo'),
     proyectoSede: document.getElementById('proyectoSede'),
     empresaDelGrupo: document.getElementById('empresaDelGrupo'),
     centroCosto: document.getElementById('centroCosto'),
@@ -107,6 +111,33 @@
       // Si el navegador no soporta normalize, seguimos comparando con el texto base.
     }
     return texto.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
+  function normalizarCorreo(valor) {
+    return String(valor || '').trim().toLowerCase();
+  }
+
+  function esCorreoValidoBasico(valor) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizarCorreo(valor));
+  }
+
+  function esCorreoCorporativoPermitido(valor) {
+    const correo = normalizarCorreo(valor);
+    if (!esCorreoValidoBasico(correo)) return false;
+    return allowedEmailDomains.some(function (dominio) {
+      return correo.slice(-String(dominio || '').length) === String(dominio || '').toLowerCase();
+    });
+  }
+
+  function actualizarEstadoCorreoCorporativo() {
+    const sinCorreoCorporativo = !!el.sinCorreoCorporativo.checked;
+    if (sinCorreoCorporativo) {
+      el.correoElectronico.value = '';
+    }
+    el.correoElectronico.disabled = sinCorreoCorporativo;
+    el.correoElectronico.classList.toggle('is-disabled', sinCorreoCorporativo);
+    el.correoElectronico.placeholder = sinCorreoCorporativo ? sinCorreoText : 'Ej. nombre@empresa.com';
+    actualizarProgreso();
   }
 
   function actualizarVisibilidadAnydesk() {
@@ -211,12 +242,13 @@
   }
 
   function actualizarProgreso() {
+    const correoCompleto = el.sinCorreoCorporativo.checked || esCorreoCorporativoPermitido(el.correoElectronico.value);
     const campos = [
       normalizarDni(el.dni.value).length === dniLength,
       normalizarMovil(el.movil.value).length === movilLength,
       !!el.nombreCompleto.value.trim(),
       !!el.cargo.value.trim(),
-      !!el.correoElectronico.value.trim(),
+      correoCompleto,
       !!el.proyectoSede.value.trim(),
       !!el.empresaDelGrupo.value,
       !!el.centroCosto.value,
@@ -362,7 +394,7 @@
     el.activoAfectado.value = '';
     el.tipoEquipo.value = '';
     el.activoGrid.innerHTML = '';
-    el.activoAyuda.textContent = texto || 'Ingresa tu DNI para cargar tus activos asignados.';
+    el.activoAyuda.textContent = texto || 'Ingresa tu DNI para cargar tus activos personales y los compartidos de tu CECO.';
     actualizarTipoProblemaPorActivo(null);
     actualizarProgreso();
   }
@@ -382,13 +414,135 @@
     actualizarProgreso();
   }
 
+  function renderActivoCard(activo, container) {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'activo-card' + (activo.isVirtual ? ' is-virtual' : '');
+    card.dataset.assetId = activo.id || '';
+    card.setAttribute('role', 'option');
+    card.setAttribute('aria-selected', 'false');
+
+    const icon = document.createElement('span');
+    icon.className = 'activo-card-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.innerHTML = svgIconoActivo(activo.iconKey);
+
+    const copy = document.createElement('span');
+    copy.className = 'activo-card-copy';
+
+    const title = document.createElement('span');
+    title.className = 'activo-card-title';
+    title.textContent = activo.label || 'Activo';
+
+    const meta = document.createElement('span');
+    meta.className = 'activo-card-meta';
+    meta.textContent = [activo.sourceLabel, activo.secondaryText].filter(function (valor, indice, lista) {
+      return !!valor && lista.indexOf(valor) === indice;
+    }).join(' - ');
+
+    copy.appendChild(title);
+    if (meta.textContent) copy.appendChild(meta);
+    card.appendChild(icon);
+    card.appendChild(copy);
+    container.appendChild(card);
+  }
+
+  function renderActivoSection(config) {
+    const activos = (config && config.activos) || [];
+    if (!activos.length) return;
+
+    const section = document.createElement('section');
+    section.className = 'activo-section';
+
+    const head = document.createElement('div');
+    head.className = 'activo-section-head';
+
+    const title = document.createElement('span');
+    title.className = 'activo-section-title';
+    title.textContent = config.title || 'Activos';
+    head.appendChild(title);
+
+    if (config.description) {
+      const desc = document.createElement('span');
+      desc.className = 'activo-section-desc';
+      desc.textContent = config.description;
+      head.appendChild(desc);
+    }
+
+    const list = document.createElement('div');
+    list.className = 'activo-grid-list';
+    activos.forEach(function (activo) {
+      renderActivoCard(activo, list);
+    });
+
+    section.appendChild(head);
+    section.appendChild(list);
+    el.activoGrid.appendChild(section);
+  }
+
+  function resolverGruposActivos(payload) {
+    if (Array.isArray(payload)) {
+      const activos = payload.slice();
+      return {
+        activos: activos,
+        personales: activos.filter(function (activo) { return activo.sourceType === 'personal'; }),
+        ceco: activos.filter(function (activo) { return activo.sourceType === 'ceco' || activo.sourceType === 'personal_ceco'; }),
+        generales: activos.filter(function (activo) { return !!activo.isVirtual; })
+      };
+    }
+
+    const data = payload || {};
+    const activos = Array.isArray(data.activos) ? data.activos.slice() : [];
+    const personales = Array.isArray(data.activosPersonales) ? data.activosPersonales.slice() : [];
+    const ceco = Array.isArray(data.activosCeco) ? data.activosCeco.slice() : [];
+    const idsAgrupados = {};
+
+    personales.forEach(function (activo) {
+      if (activo && activo.id) idsAgrupados[activo.id] = true;
+    });
+    ceco.forEach(function (activo) {
+      if (activo && activo.id) idsAgrupados[activo.id] = true;
+    });
+
+    const generales = activos.filter(function (activo) {
+      return !idsAgrupados[activo.id] || !!activo.isVirtual;
+    });
+
+    return {
+      activos: activos,
+      personales: personales,
+      ceco: ceco,
+      generales: generales
+    };
+  }
+
   function renderActivos(activos, mensaje) {
-    activosDisponibles = activos || [];
+    const grupos = resolverGruposActivos(activos);
+    activosDisponibles = grupos.activos || [];
     el.activoSeleccionadoId.value = '';
     el.activoAfectado.value = '';
     el.activoGrid.innerHTML = '';
     el.activoAyuda.textContent = mensaje || 'Selecciona un activo afectado.';
     actualizarTipoProblemaPorActivo(null);
+
+    renderActivoSection({
+      title: 'Tus activos',
+      description: 'Equipos o dispositivos asignados directamente a tu usuario.',
+      activos: grupos.personales
+    });
+    renderActivoSection({
+      title: 'Activos compartidos del CECO',
+      description: 'Impresoras y escaneres compartidos del centro de costo al que perteneces.',
+      activos: grupos.ceco
+    });
+    renderActivoSection({
+      title: 'Opciones generales',
+      description: 'Usa estas opciones si el incidente no corresponde a un activo listado arriba.',
+      activos: grupos.generales
+    });
+
+    actualizarProgreso();
+    return;
 
     activosDisponibles.forEach(function (activo) {
       const card = document.createElement('button');
@@ -412,10 +566,12 @@
 
       const meta = document.createElement('span');
       meta.className = 'activo-card-meta';
-      meta.textContent = activo.secondaryText || '';
+      meta.textContent = [activo.sourceLabel, activo.secondaryText].filter(function (valor, indice, lista) {
+        return !!valor && lista.indexOf(valor) === indice;
+      }).join(' · ');
 
       copy.appendChild(title);
-      if (activo.secondaryText) copy.appendChild(meta);
+      if (meta.textContent) copy.appendChild(meta);
       card.appendChild(icon);
       card.appendChild(copy);
       el.activoGrid.appendChild(card);
@@ -430,7 +586,7 @@
     el.activoSeleccionadoId.value = '';
     el.activoAfectado.value = '';
     el.activoGrid.innerHTML = '';
-    el.activoAyuda.textContent = 'Cargando activos asignados...';
+    el.activoAyuda.textContent = 'Cargando activos personales y compartidos del CECO...';
     actualizarProgreso();
 
     google.script.run
@@ -635,8 +791,14 @@
 
         el.nombreCompleto.value = res.result.nombreCompleto || '';
         el.cargo.value = res.result.cargo || '';
-        if (res.result.movil) el.movil.value = normalizarMovil(res.result.movil);
-        if (res.result.correoElectronico) el.correoElectronico.value = String(res.result.correoElectronico || '').trim();
+        el.movil.value = normalizarMovil(res.result.movil || '');
+        if (res.result.correoElectronico) {
+          el.sinCorreoCorporativo.checked = false;
+          actualizarEstadoCorreoCorporativo();
+          el.correoElectronico.value = normalizarCorreo(res.result.correoElectronico);
+        } else if (!el.sinCorreoCorporativo.checked) {
+          el.correoElectronico.value = '';
+        }
         el.proyectoSede.value = res.result.proyecto || '';
         el.empresaDelGrupo.value = res.result.empresa || '';
         el.cecoNumero.value = res.result.cecoNumero || '';
@@ -676,7 +838,7 @@
       dniEnConsulta = '';
       el.btnBuscarDni.disabled = false;
       el.btnBuscarDni.classList.remove('is-loading');
-      limpiarActivos('Ingresa tu DNI para cargar tus activos asignados.');
+      limpiarActivos('Ingresa tu DNI para cargar tus activos personales y compartidos de tu CECO.');
       if (el.dniAyuda.classList.contains('alerta')) {
         el.dniAyuda.textContent = '';
         el.dniAyuda.className = 'ayuda';
@@ -710,6 +872,15 @@
 
   el.movil.addEventListener('input', function () {
     el.movil.value = normalizarMovil(el.movil.value);
+  });
+
+  el.correoElectronico.addEventListener('input', function () {
+    el.correoElectronico.value = normalizarCorreo(el.correoElectronico.value);
+  });
+
+  el.sinCorreoCorporativo.addEventListener('change', function () {
+    actualizarEstadoCorreoCorporativo();
+    if (!el.sinCorreoCorporativo.checked) el.correoElectronico.focus();
   });
 
   el.empresaDelGrupo.addEventListener('change', function () {
@@ -760,12 +931,16 @@
   });
 
   function validarFrontend() {
+    const correo = normalizarCorreo(el.correoElectronico.value);
+    const requiereCorreo = !el.sinCorreoCorporativo.checked;
     const requeridos = [
       [normalizarDni(el.dni.value).length === dniLength, 'Ingresa un DNI valido (' + dniLength + ' digitos).'],
       [normalizarMovil(el.movil.value).length === movilLength, 'Ingresa un movil valido (' + movilLength + ' digitos).'],
       [!!el.nombreCompleto.value.trim(), 'Ingresa el nombre completo.'],
       [!!el.cargo.value.trim(), 'Ingresa el cargo.'],
-      [/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(el.correoElectronico.value || '').trim()), 'Ingresa un correo electronico valido.'],
+      [!requiereCorreo || !!correo, 'Ingresa el correo electronico o activa "No cuento con correo corporativo".'],
+      [!requiereCorreo || esCorreoValidoBasico(correo), 'Ingresa un correo electronico valido.'],
+      [!requiereCorreo || esCorreoCorporativoPermitido(correo), 'El correo debe pertenecer a: ' + allowedEmailDomainsLabel + '.'],
       [!!el.proyectoSede.value.trim(), 'Ingresa el area o proyecto / sede.'],
       [!!el.empresaDelGrupo.value, 'No se pudo completar la empresa del trabajador desde el padron. Verifica el DNI o contacta a TIC.'],
       [!!el.centroCosto.value, 'No se pudo completar el centro de costo del trabajador desde el padron. Verifica el DNI o contacta a TIC.'],
@@ -796,7 +971,8 @@
         nombreCompleto: el.nombreCompleto.value,
         cargo: el.cargo.value,
         movil: normalizarMovil(el.movil.value),
-        correoElectronico: String(el.correoElectronico.value || '').trim(),
+        correoElectronico: normalizarCorreo(el.correoElectronico.value),
+        sinCorreoCorporativo: !!el.sinCorreoCorporativo.checked,
         proyectoSede: el.proyectoSede.value,
         centroCosto: el.centroCosto.value,
         cecoNumero: el.cecoNumero.value,
@@ -845,6 +1021,8 @@
       campo.value = '';
     });
 
+    el.sinCorreoCorporativo.checked = false;
+
     if (dniAutoBusquedaTimer) {
       clearTimeout(dniAutoBusquedaTimer);
       dniAutoBusquedaTimer = null;
@@ -859,8 +1037,9 @@
     el.cecoNumero.value = '';
     cecoPreferido = null;
     ultimaClaveSlaAutoMostrada = '';
-    limpiarActivos('Ingresa tu DNI para cargar tus activos asignados.');
+    limpiarActivos('Ingresa tu DNI para cargar tus activos personales y compartidos de tu CECO.');
     actualizarVisibilidadAnydesk();
+    actualizarEstadoCorreoCorporativo();
     el.dniAyuda.textContent = '';
     el.dniAyuda.className = 'ayuda';
     actualizarProgreso();
@@ -868,8 +1047,9 @@
   });
 
   cargarCatalogos();
-  limpiarActivos('Ingresa tu DNI para cargar tus activos asignados.');
+  limpiarActivos('Ingresa tu DNI para cargar tus activos personales y compartidos de tu CECO.');
   actualizarVisibilidadAnydesk();
+  actualizarEstadoCorreoCorporativo();
   actualizarProgreso();
 })();
 </script>

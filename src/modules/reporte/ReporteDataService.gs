@@ -46,7 +46,7 @@ function ReporteDataService_crearRegistro_(datos) {
       DNI_SOLICITANTE: datos.dni,
       CARGO_SOLICITANTE: datos.cargo,
       MOVIL_SOLICITANTE: datos.movil,
-      CORREO_ELECTRONICO_SOLICITANTE: Utils_normalizarCorreo_(datos.correoElectronico),
+      CORREO_ELECTRONICO_SOLICITANTE: Utils_resolverCorreoSolicitante_(datos.correoElectronico, datos.sinCorreoCorporativo),
       PROYECTO_SEDE: datos.proyectoSede,
       CENTRO_DE_COSTO: datos.centroCosto,
       CECO_NUMERO: datos.cecoNumero || '',
@@ -701,7 +701,7 @@ function ReporteDataService_obtenerCorreoRecordadoPorDni_(dni) {
     for (let i = cantidadFilas - 1; i >= 0; i--) {
       if (Utils_normalizarDni_(dnis[i][0]) !== dniNormalizado) continue;
       const correo = Utils_normalizarCorreo_(correos[i][0]);
-      if (Utils_esCorreoValido_(correo)) return correo;
+      if (Utils_esCorreoCorporativoPermitido_(correo)) return correo;
     }
   } catch (error) {
     LogService_error_('ReporteDataService_obtenerCorreoRecordadoPorDni_', error, { dni: dniNormalizado });

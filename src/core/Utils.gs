@@ -38,6 +38,37 @@ function Utils_esCorreoValido_(valor) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(Utils_normalizarCorreo_(valor));
 }
 
+function Utils_obtenerDominiosCorreoPermitidos_() {
+  return (CONFIG.VALIDATION.CORREO_DOMINIOS_PERMITIDOS || []).map(function (dominio) {
+    return Utils_normalizarCorreo_(dominio);
+  }).filter(function (dominio) {
+    return !!dominio;
+  });
+}
+
+function Utils_esCorreoCorporativoPermitido_(valor) {
+  const correo = Utils_normalizarCorreo_(valor);
+  if (!Utils_esCorreoValido_(correo)) return false;
+
+  const dominios = Utils_obtenerDominiosCorreoPermitidos_();
+  return dominios.some(function (dominio) {
+    return correo.slice(-dominio.length) === dominio;
+  });
+}
+
+function Utils_textoSinCorreoCorporativo_() {
+  return String(CONFIG.VALIDATION.CORREO_SIN_CORPORATIVO || 'Sin correo').trim() || 'Sin correo';
+}
+
+function Utils_esMarcadorSinCorreoCorporativo_(valor) {
+  return Utils_normalizarCorreo_(valor) === Utils_normalizarCorreo_(Utils_textoSinCorreoCorporativo_());
+}
+
+function Utils_resolverCorreoSolicitante_(correo, sinCorreoCorporativo) {
+  if (sinCorreoCorporativo) return Utils_textoSinCorreoCorporativo_();
+  return Utils_normalizarCorreo_(correo);
+}
+
 function Utils_now_() {
   return new Date();
 }

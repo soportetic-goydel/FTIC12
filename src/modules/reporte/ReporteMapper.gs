@@ -1,11 +1,16 @@
 function ReporteMapper_desdeCliente_(payload) {
   payload = payload || {};
+  const sinCorreoCorporativo = payload.sinCorreoCorporativo === true ||
+    String(payload.sinCorreoCorporativo || '').trim().toLowerCase() === 'true' ||
+    String(payload.sinCorreoCorporativo || '').trim() === '1';
+
   return {
     dni: Utils_normalizarDni_(payload.dni),
     nombreCompleto: String(payload.nombreCompleto || '').trim(),
     cargo: String(payload.cargo || '').trim(),
     movil: Utils_soloDigitos_(payload.movil),
     correoElectronico: Utils_normalizarCorreo_(payload.correoElectronico),
+    sinCorreoCorporativo: sinCorreoCorporativo,
     proyectoSede: String(payload.proyectoSede || '').trim(),
     centroCosto: String(payload.centroCosto || '').trim(),
     cecoNumero: String(payload.cecoNumero || '').trim(),

@@ -4,6 +4,8 @@
 ### Corregido
 - Reemplazada la generacion del formato F-TIC-12 desde `Google Sheets -> PDF` por un nuevo flujo `HTML -> PDF`, eliminando la dependencia de una copia temporal del spreadsheet y el descalce de filas/casillas en la seccion 3.
 - Corregida la maquetacion del bloque `3. EVALUACION Y RESOLUCION (USO INTERNO TIC)`: el diagnostico TIC ahora se renderiza en un layout HTML fijo, sin empujar ni desalinear `Accion Tomada`, `Estado Final` ni el cierre tecnico.
+- Ajustado el catalogo de activos por DNI para incorporar impresoras y escaneres compartidos del CECO del colaborador, devolviendo al frontend un objeto unificado con `activos`, `activosPersonales` y `activosCeco`.
+- Endurecida la politica de correo corporativo en frontend y backend: el formulario ahora acepta solo dominios permitidos, incorpora el switch `No cuento con correo corporativo`, guarda `Sin correo` cuando aplica y evita reutilizar/autocompletar correos externos desde el padron o el historial.
 
 ### Agregado
 - Nueva plantilla `src/templates/pdf/FTic12PdfTemplate.html` derivada del formato aprobado `F-TIC-12.html`, limpiada para quitar artefactos del exportado de Google Sheets (grilla, encabezados de filas/columnas y referencias `resources/...`) y conservando las lineas estructurales del documento.

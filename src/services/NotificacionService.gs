@@ -1,8 +1,9 @@
 function NotificacionService_enviarResumenAtencion_(registro) {
   const idRegistro = String(registro && registro.ID_REGISTRO || '').trim();
-  const correoDestino = Utils_normalizarCorreo_(registro && registro.CORREO_ELECTRONICO_SOLICITANTE);
+  const correoRegistrado = registro && registro.CORREO_ELECTRONICO_SOLICITANTE;
+  const correoDestino = Utils_normalizarCorreo_(correoRegistrado);
 
-  if (!correoDestino) {
+  if (!correoDestino || Utils_esMarcadorSinCorreoCorporativo_(correoRegistrado)) {
     return {
       ok: false,
       intentado: true,
@@ -15,7 +16,7 @@ function NotificacionService_enviarResumenAtencion_(registro) {
     };
   }
 
-  if (!Utils_esCorreoValido_(correoDestino)) {
+  if (!Utils_esCorreoCorporativoPermitido_(correoDestino)) {
     return {
       ok: false,
       intentado: true,

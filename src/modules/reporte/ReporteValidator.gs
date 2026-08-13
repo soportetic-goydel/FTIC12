@@ -2,6 +2,8 @@ function ReporteValidator_validar_(datos) {
   const errores = [];
   const correo = Utils_normalizarCorreo_(datos.correoElectronico);
   const correoValido = Utils_esCorreoValido_(correo);
+  const correoCorporativoPermitido = Utils_esCorreoCorporativoPermitido_(correo);
+  const dominiosPermitidos = Utils_obtenerDominiosCorreoPermitidos_().join(', ');
 
   if (datos.dni.length !== CONFIG.VALIDATION.DNI_LENGTH) {
     errores.push('El DNI debe tener ' + CONFIG.VALIDATION.DNI_LENGTH + ' digitos.');
@@ -11,8 +13,13 @@ function ReporteValidator_validar_(datos) {
   if (datos.movil.length !== CONFIG.VALIDATION.MOVIL_LENGTH) {
     errores.push('El movil debe tener ' + CONFIG.VALIDATION.MOVIL_LENGTH + ' digitos.');
   }
-  if (!correo) errores.push('El correo electronico es obligatorio.');
-  else if (!correoValido) errores.push('El correo electronico no es valido.');
+  if (!datos.sinCorreoCorporativo) {
+    if (!correo) errores.push('El correo electronico es obligatorio.');
+    else if (!correoValido) errores.push('El correo electronico no es valido.');
+    else if (!correoCorporativoPermitido) {
+      errores.push('El correo electronico debe pertenecer a uno de estos dominios: ' + dominiosPermitidos + '.');
+    }
+  }
   if (!datos.proyectoSede) errores.push('El area o proyecto es obligatorio.');
   if (!datos.centroCosto) errores.push('El centro de costo (CECO) es obligatorio.');
   if (Object.keys(EMPRESAS_GRUPO).map(function (k) { return EMPRESAS_GRUPO[k]; }).indexOf(datos.empresaDelGrupo) === -1) {
